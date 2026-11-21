@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+*.log
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.code-workspace
+coverage/

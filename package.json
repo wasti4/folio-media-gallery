@@ -1,0 +1,29 @@
+{
+  "name": "folio-media-gallery",
+  "version": "1.8.0",
+  "private": true,
+  "productName": "Folio",
+  "description": "Локальная медиагалерея для Windows",
+  "type": "module",
+  "main": "desktop/main.mjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "test": "node --test tests/*.test.mjs",
+    "test:ui": "npm run build && node tests/viewer.e2e.mjs && node tests/appearance.e2e.mjs && node tests/workflows.e2e.mjs && node tests/editing.e2e.mjs && node tests/selection.e2e.mjs && node tests/product.e2e.mjs && node tests/series.e2e.mjs",
+    "package:win": "npm run build && node scripts/package-windows.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.2.8",
+    "lucide-react": "^0.577.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "playwright": "^1.61.0",
+    "resedit": "^3.1.1",
+    "vite": "^8.3.8"
+  }
+}

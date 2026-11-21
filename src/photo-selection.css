@@ -1,0 +1,180 @@
+.app-body { position: relative; }
+.gallery-actions .gallery-select { height: 36px; padding-inline: 10px; gap: 6px; }
+.gallery-select svg { flex-shrink: 0; }
+.app-shell .gallery-select[aria-pressed="true"] {
+  color: #242321;
+  background: linear-gradient(145deg, #f4f3ee, #d8d6d0);
+  border-color: #ffffffa0;
+  box-shadow: inset 0 1px #ffffffbd, 0 3px 11px #10101030;
+}
+.gallery-scroll[data-selecting] .gallery-wrap { padding-bottom: 86px; }
+.media-card[data-pickable] .card-main:focus-visible { outline: 2px solid #e8e4db; outline-offset: -3px; }
+.media-card[data-pickable] .format-label { opacity: 0; }
+.media-card[data-picked] {
+  border-color: #f7f0dfba;
+  box-shadow: inset 0 0 0 1px #fff7e854, 0 7px 17px #0a0a0a48;
+}
+.card-selection {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  inset: 10px auto auto 10px;
+  border-radius: 8px;
+  border: 1px solid #f7f2e49e;
+  background: #20201c91;
+  color: #242320;
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px #f9f6ec34, 0 2px 7px #0808058f;
+  animation: select-check-in .22s var(--ease) var(--pick-delay) both;
+  transition: background .17s, border-color .17s;
+}
+.media-view-list .card-selection { inset: 6px auto auto 6px; width: 23px; height: 23px; border-radius: 7px; }
+.card-selection > svg { opacity: 0; scale: .62; transition: opacity .13s, scale .24s cubic-bezier(.18, 1.4, .35, 1); }
+[data-picked] .card-selection { background: #f0ece3; border-color: #fffaf0; }
+[data-picked] .card-selection > svg { opacity: 1; scale: 1; }
+@keyframes select-check-in {
+  from { opacity: 0; transform: translateY(5px) scale(.72); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.selection-dock {
+  position: absolute;
+  z-index: 8;
+  inset: auto auto 16px 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  padding: 5px;
+  border: 1px solid #f2efe049;
+  border-radius: 16px;
+  background: linear-gradient(155deg, #494744ed, #20201fe9);
+  backdrop-filter: blur(22px) saturate(1.09);
+  box-shadow: inset 0 1px #ffffff27, 0 10px 28px #0c0a085f;
+  color: #f5f2ec;
+  white-space: nowrap;
+  animation: selection-dock-in .28s cubic-bezier(.18, .91, .31, 1.1) both;
+}
+@keyframes selection-dock-in {
+  from { opacity: 0; transform: translateY(9px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.selection-count {
+  display: grid;
+  align-items: center;
+  min-width: 76px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.selection-count > span { animation: selection-count-in .18s var(--ease) both; }
+@keyframes selection-count-in { from { opacity: .5; transform: translateY(2px); } }
+.selection-dock button { flex-shrink: 0; }
+.selection-dock :is(.selection-all, .selection-folder) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.selection-dock .selection-all { font-size: 11px; color: #ddd7cc; }
+.selection-dock button:hover:not(:disabled), .selection-folder[aria-expanded="true"] { background: #f8efe321; }
+.selection-dock .selection-folder {
+  min-width: 0;
+  flex-shrink: 1;
+  border-color: #f4f0e433;
+  background: #ffffff12;
+}
+.selection-folder svg { flex-shrink: 0; }
+.selection-folder span { overflow: hidden; text-overflow: ellipsis; max-width: 122px; }
+.selection-dock[aria-busy="true"] [data-photo-target] { opacity: 1; }
+.selection-dock .icon-button { width: 33px; height: 34px; border-radius: 10px; }
+.selection-dock .selection-trash { color: #efb0a6; }
+.selection-dock .selection-close { color: #d4d0c6; }
+.selection-divider { width: 1px; height: 22px; flex: 0 0 1px; margin: 0 3px; background: #e5decc31; }
+.photo-folder-menu { min-width: min(240px, calc(100vw - 20px)); transform-origin: right bottom; }
+
+.photo-motion-layer { position: fixed; z-index: 100; inset: 0; pointer-events: none; overflow: clip; }
+.photo-flight {
+  position: absolute;
+  border-radius: 11px;
+  box-shadow: 0 9px 26px #08070675;
+  outline: 1px solid #fff8ea5c;
+  will-change: transform, opacity;
+}
+.photo-motion-target {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  top: 79px;
+  right: 26px;
+  width: 40px;
+  height: 40px;
+  color: #f7c2b7;
+  border: 1px solid #f5d1bd59;
+  border-radius: 13px;
+  background: #3a2e2bdc;
+  box-shadow: 0 7px 18px #0c0b0b50;
+  animation: selection-dock-in .2s var(--ease) both;
+}
+.photo-arrival {
+  position: absolute;
+  width: 0;
+  height: 0;
+  color: #fff0ca;
+}
+.photo-arrival[data-action="remove"] { color: #ffc5b8; }
+.photo-arrival i {
+  position: absolute;
+  inset: -4px auto auto -4px;
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 64% 36%, 100% 50%, 64% 64%, 50% 100%, 36% 64%, 0 50%, 36% 36%);
+  animation: photos-land .22s var(--ease) both;
+}
+@keyframes photos-land {
+  0% { opacity: 0; transform: scale(.25); }
+  34% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) scale(.45); }
+}
+
+:root[data-theme="light"] .app-shell .gallery-select[aria-pressed="true"] {
+  background: #302c25;
+  border-color: #28231c7c;
+  color: #fcf9f3;
+}
+:root[data-theme="light"] .media-card[data-picked] {
+  border-color: #574a38b0;
+  box-shadow: inset 0 0 0 1px #5a4d392d, 0 6px 14px #2f241a26;
+}
+:root[data-theme="light"] .selection-dock {
+  color: #2e2821;
+  background: linear-gradient(155deg, #fffcf3f4, #e4ddd1ef);
+  border-color: #45382958;
+  box-shadow: inset 0 1px #ffffffb8, 0 9px 25px #372b224f;
+}
+:root[data-theme="light"] .selection-dock .selection-all { color: #5d5143; }
+:root[data-theme="light"] .selection-dock .selection-divider { background: #3d312a37; }
+:root[data-theme="light"] .selection-dock .selection-folder { border-color: #493b3041; }
+:root[data-theme="light"] .selection-dock button:not(:disabled):hover,
+:root[data-theme="light"] .selection-folder[aria-expanded="true"] { background: #382b2415; }
+:root[data-theme="light"] .app-shell .selection-dock .selection-trash { color: #963f34; }
+:root[data-theme="light"] .photo-arrival { color: #9c752a; }
+:root[data-theme="light"] .photo-arrival[data-action="remove"] { color: #a74336; }
+
+@media (max-width: 700px) {
+  .gallery-actions .gallery-select { padding-inline: 8px; }
+  .gallery-select:not([aria-pressed="true"]) span { display: none; }
+}

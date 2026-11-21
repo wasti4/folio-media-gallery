@@ -1,0 +1,18 @@
+.video-frame-message {
+  position: absolute;
+  z-index: 1;
+  bottom: 11px;
+  max-width: calc(100% - 22px);
+  padding: 8px 12px;
+  color: #f0f0f0;
+  background: #161616e6;
+  border: 1px solid #ffffff30;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 470px) {
+  .player :is(.player-row, .transport, .player-options) { gap: 3px; }
+  .player .player-row .icon-button { width: 28px; }
+}
