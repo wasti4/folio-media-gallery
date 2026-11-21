@@ -13,7 +13,7 @@ const destinations = [
   { id: 'all', label: 'Все файлы', Icon: LayoutGrid },
   { id: 'favorites', label: 'Избранное', Icon: Heart },
   { id: 'recent', label: 'Недавние', Icon: Clock3 },
-  ...(isDesktop ? [{ id: 'series', label: 'Сериалы', Icon: Tv }, { id: 'deleted', label: 'Недавно удалённые', Icon: Trash2 }] : []),
+  ...(isDesktop ? [{ id: 'series', label: 'Сериалы', Icon: Tv }, { id: 'deleted', label: 'Недавно удалённые', shortLabel: 'Удалённые', Icon: Trash2 }] : []),
 ]
 
 export function BrandMark() {
@@ -57,11 +57,11 @@ export function Sidebar({ state, active, navigate, createFolder, expanded, setEx
       {lens && <div className="sidebar-lens" aria-hidden="true" style={{ '--rail-top': lens.top + 'px', height: lens.height }} />}
       <nav className="side-group" aria-label={t('Медиатека')}>
         <div className="side-heading rail-label section-heading">{t('Медиатека')}</div>
-        {destinations.map(({ id, label, Icon }) => <button type="button" key={id} className={'side-row' + (active === id ? ' selected' : '')}
+        {destinations.map(({ id, label, shortLabel = label, Icon }) => <button type="button" key={id} className={'side-row' + (active === id ? ' selected' : '')}
           data-rail-current={active === id ? '' : undefined}
           title={t(label)} aria-label={t(label)} aria-current={active === id ? 'page' : undefined} onClick={() => navigate(id)}>
           <Icon className="side-icon" size={18} strokeWidth={1.7} />
-          <span className="side-name rail-label">{t(label)}</span>
+          <span className="side-name rail-label">{t(shortLabel)}</span>
           {id === 'all' && <span className="side-count rail-label">{state.items.length}</span>}
         </button>)}
       </nav>

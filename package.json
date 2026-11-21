@@ -1,9 +1,9 @@
 {
   "name": "folio-media-gallery",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "productName": "Folio",
-  "description": "Локальная медиагалерея для Windows",
+  "description": "A local media gallery for Windows",
   "type": "module",
   "main": "desktop/main.mjs",
   "scripts": {

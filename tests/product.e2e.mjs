@@ -99,6 +99,22 @@ try {
   await button(page, 'Actions for “Coast”').click()
   await menu(page, 'Delete photo').click()
   await page.getByRole('dialog', { name: 'Delete photo', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click()
+  const sidebarToggle = page.locator('.sidebar-toggle')
+  if (await sidebarToggle.getAttribute('aria-expanded') === 'false') await sidebarToggle.click()
+  for (const [languageMenu, language, full, short] of [
+    ['Interface language', 'Русский', 'Недавно удалённые', 'Удалённые'],
+    ['Язык интерфейса', '简体中文', '最近删除', '已删除'],
+    ['界面语言', 'English', 'Recently deleted', 'Deleted'],
+  ]) {
+    await button(page, languageMenu).click()
+    await page.getByRole('menuitemcheckbox', { name: language, exact: true }).click()
+    const deleted = button(page, full)
+    const label = deleted.locator('.side-name')
+    assert.equal(await label.textContent(), short)
+    await label.evaluate(() => document.fonts.ready.then(() => true))
+    assert.ok(await label.evaluate(node => node.scrollWidth <= node.clientWidth), `${short} should fit on one line`)
+    assert.equal(await deleted.getAttribute('title'), full)
+  }
   await button(page, 'Recently deleted').click()
   await button(page, 'Restore “Coast”').click()
   await page.getByRole('heading', { name: 'No deleted photos yet', exact: true }).waitFor()

@@ -1,53 +1,53 @@
 # Folio
 
-Локальная медиагалерея для Windows 10 и новее (x64). Установщики доступны в [GitHub Releases](https://github.com/wasti4/folio-media-gallery/releases). Установщик обновляет прежнюю установку Folio для текущего пользователя. После локальной сборки установщик находится в `release/Folio-1.8.0-Setup.exe`, а переносимая версия запускается через `release/Folio-1.8.0/Folio.exe`. При переносе приложения скопируйте папку сборки целиком.
+Folio is a local media gallery for Windows 10 and later (x64). Browse photos, GIFs, and videos, organize a library, and watch series with external audio and subtitles.
 
-## Медиатека
+Find installers in [GitHub Releases](https://github.com/wasti4/folio-media-gallery/releases). The installer updates an existing per-user installation. After a local installer build, run `release/Folio-<version>-Setup.exe`. For the portable build, keep the `release/Folio-<version>/` folder intact and run `Folio.exe` from it.
 
-- Меню **Импорт** добавляет отдельные файлы и папки со всем их содержимым. Файлы и папки также можно перетащить в окно.
-- Folio копирует оригиналы в хранилище медиатеки. По умолчанию это `%APPDATA%\Luma\Library\Media`. В **Настройках медиатеки** видно расположение, размер файлов и кэша и свободное место. Пункт **Перенести медиатеку…** позволяет выбрать другой диск. Folio проверяет содержимое копий перед переключением пути.
-- При обновлении Folio переносит в хранилище доступные оригиналы из прежней медиатеки. Если исходный диск был отключён, подключите его и выберите **Скопировать прежние оригиналы**.
-- Папки открываются через боковую панель. Разверните её кнопкой внизу, чтобы создать подборку. Медиа добавляются в подборки через меню карточки.
-- `Ctrl+K` открывает поиск, `Ctrl+O` выбирает файлы. Меню карточки **Изменить теги** добавляет теги к фото. **Фильтры** позволяют выбирать год, месяц, диапазон дат, тег и папку. Сортировка **По дате съёмки** использует метаданные изображения, где они есть. При импорте Folio предлагает пропустить файлы с точно таким же содержимым.
-- В просмотрщике двойной клик приближает фото к курсору, а повторный возвращает его к размеру окна. Колесо меняет масштаб, зажатая левая кнопка перемещает увеличенное фото.
-- Стрелки пролистывают фото коротким сдвигом в направлении перехода. Если Windows запрашивает уменьшенное движение, фото меняются без сдвига.
-- Кнопка **Удалить фото** перемещает внутреннюю копию в **Недавно удалённые**. Фото можно восстановить в исходную папку Folio и подборки либо отправить из этого раздела в корзину Windows.
-- Нажмите **Выбрать**, чтобы отметить несколько фотографий. `Shift` с кликом выбирает диапазон, а `Ctrl+A` отмечает все фотографии текущего раздела. На нижней панели можно переместить снимки в папку, добавить их в подборку или удалить. `Ctrl+Z` отменяет последнее пакетное перемещение.
-- В Windows 11 окно использует системный Acrylic. Его вид зависит от фона под окном и системной настройки прозрачности. В веб-превью стекло размывает пейзаж.
-- Переключатель рядом с импортом меняет тему по клику или перетаскиванию. Когда он в фокусе, стрелки влево и вправо выбирают тёмную и светлую тему. Выбор сохраняется после перезапуска.
-- При первом запуске приветствия повторяются по кругу. Нажатие по окну открывает обзор возможностей, а кнопка **Пропустить** сразу раскрывает галерею. Чтобы посмотреть вступление снова, закройте Folio и запустите `Folio.exe --intro`.
-- Интро использует тему галереи. При первом запуске Folio выбирает светлую или тёмную палитру по настройке Windows.
-- Язык можно выбрать во время знакомства или через значок глобуса. Доступны русский, английский и упрощённый китайский.
+## Library
 
-## Перенос медиатеки
+- Use **Import** to add files or whole folders, or drag them into the window. Folio copies originals into its library at `%APPDATA%\Luma\Library\Media` by default.
+- **Library settings** shows the current location, media size, cache size, and free space. **Move library…** verifies copied files before switching to the new location.
+- When upgrading a legacy library that links to originals, Folio copies any originals it can access. Reconnect a missing source drive and use **Copy existing originals** to finish.
+- Expand the sidebar to browse folders and create collections. Use a card's menu to add media to collections or edit tags.
+- Press `Ctrl+K` to search and `Ctrl+O` to choose files. Filter by year, month, date range, tag, or folder. Capture-date sorting uses image metadata where available. Folio offers to skip exact duplicates during import.
+- In the viewer, double-click to zoom toward the pointer or return to fit. Scroll to zoom and drag with the left mouse button to pan. Arrow keys move between photos. Folio respects Windows' reduced-motion setting.
+- **Delete photo** moves the library copy to **Recently deleted**, shown as **Deleted** in the sidebar. Restore photos to their previous folders and collections or send them to the Windows Recycle Bin.
+- **Select** enables batch actions. Use `Shift`-click to select a range or `Ctrl+A` for all photos in the current view. The selection bar moves photos, adds them to a collection, or deletes them. `Ctrl+Z` undoes the last batch move.
+- On Windows 11, the window uses system Acrylic. Its appearance depends on the desktop and the Windows transparency setting. The web preview uses a blurred landscape.
+- Click or drag the theme switch beside **Import**. With the switch focused, the arrow keys choose dark or light. Your choice is saved.
+- Click the first-launch greeting to open the tour, or choose **Skip** to go straight to the library. To replay it, close Folio and start it with `Folio.exe --intro`. The tour uses the gallery theme, which initially follows Windows.
+- Choose English, Russian, or Simplified Chinese during onboarding or through the globe button.
 
-Выберите **Импорт → Создать резервную копию…** и укажите папку назначения. Получившаяся папка `Folio-…` содержит оригиналы, внешние дорожки, субтитры, подборки, избранное и историю. Её можно скопировать целиком на другой диск или компьютер.
+## Back up or move a library
 
-В **Настройках медиатеки** можно выбрать папку для ежедневных или еженедельных копий. Расписание работает, пока Folio открыт. Там же видно время последней успешной автоматической копии.
+Choose **Import → Create backup…** and select a destination. The resulting `Folio-…` folder contains originals, external audio, subtitles, collections, favorites, and viewing history. Copy the entire folder to another drive or computer.
 
-В Folio на новом компьютере выберите **Импорт → Восстановить из копии…** и укажите папку `Folio-…`. Программа проверит контрольные суммы файлов в новых копиях и объединит данные с открытой медиатекой. Время переноса зависит от объёма файлов и скорости дисков.
+In **Library settings**, choose a backup destination and a daily or weekly schedule. Automatic backups run while Folio is open. The settings show the last successful automatic backup.
 
-## Редактор и обои
+On the new computer, choose **Import → Restore from backup…** and select the `Folio-…` folder. Folio verifies checksums in newer backups and merges their contents into the current library.
 
-- Откройте фото или видео и нажмите **Редактировать**. Доступны кадрирование, поворот, яркость, контраст, насыщенность и резкость. Кнопка **Исходник** показывает кадр до правок.
-- В редакторе фото изображение меняется по ходу перетягивания ползунков. Можно отдельно настроить экспозицию, тени, светлые участки и теплоту. Во вкладке **Кадр** доступны отражение по горизонтали и вертикали.
-- Для видео вкладка **Обрезка** задаёт начало и конец фрагмента. Воспроизведение в редакторе показывает выбранный отрезок с применёнными правками.
-- **Сохранить копию** добавляет отдельный файл в медиатеку рядом с оригиналом. Фото сохраняются в PNG, видео — в MP4 со встроенным аудио.
-- **Сделать обоями** доступно в меню карточки фото и в его просмотрщике. Отредактированная копия тоже подходит для обоев Windows.
+## Editor and wallpaper
 
-## Плеер
+- Open a photo or video and choose **Edit** to crop, rotate, or adjust brightness, contrast, saturation, and sharpness. Use **Original** to compare with the source.
+- Photo adjustments update as you drag the sliders. Additional controls cover exposure, shadows, highlights, and warmth. The **Crop** tab supports horizontal and vertical flips.
+- For video, use **Trim** to set the start and end. Preview the selected range with adjustments applied.
+- **Save copy** adds a new file beside the original in the library. Photos are exported as PNG and videos as MP4 with embedded audio.
+- **Set as wallpaper** is available from a photo card's menu and from the viewer. Edited copies work as wallpaper too.
 
-Откройте **Аудиодорожки** или **Субтитры** на панели плеера. Для MKV доступны встроенные аудиодорожки и текстовые субтитры.
+## Player
 
-Чтобы Folio автоматически нашёл отдельные дорожки, импортируйте общую папку аниме с подпапками **Видео**, **Субтитры** и **Аудиодорожки**. Folio сопоставляет файлы по названию, номеру серии и сезону. Озвучки из отдельных подпапок появляются в плеере под названиями этих папок. Для уже импортированных видео выберите **Импорт → Обновить медиатеку**. Дорожки с неоднозначными именами можно назначить через меню плеера.
+Open **Audio tracks** or **Subtitles** in the player. MKV playback supports embedded audio and text subtitle tracks.
 
-В разделе **Сериалы** эпизоды с номерами в именах сгруппированы по сезонам. Folio запоминает позицию, выбор озвучки и субтитров. В списке эпизодов можно поставить отметку о просмотре. Кнопка **Сохранить кадр** сохраняет текущий кадр в PNG рядом с видео в медиатеке.
+To match external tracks automatically, import the parent folder containing the video, subtitle, and audio subfolders. Folio matches tracks by title, episode number, and season. Dubs from separate subfolders appear under those folder names. For videos already in the library, choose **Import → Refresh the library**. Use the player menus to attach tracks manually when file names are ambiguous.
 
-Внешние субтитры поддерживают SRT, ASS, SSA и VTT. Для внешнего звука доступны, среди прочих, MKA, FLAC, AAC, MP3, WAV и AC3. Если видео требует преобразования, плеер использует FFmpeg и воспроизводит поток с разрешением до 1080p и звуком в стерео.
+**Series** groups numbered episodes into seasons and remembers playback position, audio, and subtitles. Mark episodes as watched from the episode list. **Save frame** adds a PNG beside the video in the library.
 
-`Пробел` управляет воспроизведением, стрелки перематывают на 5 секунд, `F` переключает полный экран, `M` управляет звуком.
+External subtitles support SRT, ASS, SSA, and VTT. External audio supports formats including MKA, FLAC, AAC, MP3, WAV, and AC3. When conversion is needed, Folio uses FFmpeg to stream video at up to 1080p with stereo audio.
 
-## Разработка
+Press `Space` to play or pause, the arrow keys to seek by five seconds, `F` for fullscreen, and `M` to mute.
+
+## Development
 
 ```powershell
 npm.cmd ci
@@ -58,10 +58,10 @@ npm.cmd run package:win
 npm.cmd run package:win -- --installer
 ```
 
-`npm.cmd run dev` запускает веб-превью. Для настольного запуска из исходников FFmpeg и FFprobe доступны через `PATH` или каталог `LUMA_FFMPEG_DIR`. Переносимая сборка включает оба файла.
+Use `npm.cmd run dev` for the browser preview. Desktop development requires FFmpeg and FFprobe on `PATH` or in the directory set by `LUMA_FFMPEG_DIR`. Both are bundled with the portable build.
 
-Для установщика нужен Inno Setup. Укажите путь к `ISCC.exe` через `FOLIO_ISCC_PATH`, когда компилятор лежит в отдельном каталоге. По умолчанию пользовательская установка находится в `%LOCALAPPDATA%\Programs\Folio`, а профиль медиатеки находится отдельно. Для релиза с подписью укажите отпечаток сертификата в `FOLIO_SIGN_CERT_THUMBPRINT` и добавьте `--require-signing` к аргументам сборки.
+Building the installer requires Inno Setup. Set `FOLIO_ISCC_PATH` to the path to `ISCC.exe` if it is installed in a custom location. The installer defaults to `%LOCALAPPDATA%\Programs\Folio`. The library profile is stored separately. For signed builds, set `FOLIO_SIGN_CERT_THUMBPRINT` and pass `--require-signing` alongside `--installer`.
 
-В тестовой сборке 1.8.0 используется FFmpeg 9.0.2 Essentials от Gyan. Версия и параметры сборки записаны в `resources/ffmpeg/FFmpeg.txt`, рядом находится текст GPLv3. Исходники FFmpeg версии 9.0.2 доступны в [архиве проекта FFmpeg](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz). Перед публичным распространением установщика нужно подготовить полный комплект соответствующих исходников для включённой сборки FFmpeg и её библиотек.
+The private test builds use FFmpeg 9.0.2 Essentials from Gyan. The build version and configuration are in `resources/ffmpeg/FFmpeg.txt` alongside the GPLv3 license. The [FFmpeg source archive](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz) contains upstream version 9.0.2. Prepare the complete corresponding source for the bundled build and its libraries before distributing the installer publicly.
 
-Демонстрационные фотографии находятся в `public/demo`, изображение побережья для превью в `public/coast.jpg`. Они созданы в ImageGen. Демонстрационные видео и GIF собраны из этих изображений.
+The demo images in `public/demo` and the coastal backdrop in `public/coast.jpg` were generated with ImageGen. The demo videos and GIFs were assembled from these images.
