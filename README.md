@@ -23,10 +23,10 @@
 </p>
 
 <p align="center">
-  <a href="docs/demo/folio-demo.mp4"><img src="docs/demo/folio-preview.webp" alt="Folio demo: library, viewer, photo editor and private folder"></a>
+  <a href="https://github.com/wasti4/folio-media-gallery/raw/main/docs/demo/folio-demo.mp4"><img src="docs/demo/folio-preview.webp" alt="Folio demo: library, viewer, photo editor and private folder"></a>
 </p>
 
-<p align="center"><sub>Click the preview for the full demo at 60 fps.</sub></p>
+<p align="center"><sub>Click the preview to download the full 76-second demo (MP4, 1080p at 60 fps).</sub></p>
 
 ## Why Folio
 
