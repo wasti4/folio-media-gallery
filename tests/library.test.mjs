@@ -6,7 +6,7 @@ import test from 'node:test'
 import { Library } from '../desktop/library.mjs'
 
 async function fixture(t) {
-  const temp = await mkdtemp(path.join(tmpdir(), 'luma-library-'))
+  const temp = await mkdtemp(path.join(tmpdir(), 'folio-library-'))
   t.after(() => rm(temp, { recursive: true, force: true }))
   const source = path.join(temp, 'Медиа')
   const album = path.join(source, 'Аниме')
@@ -118,6 +118,20 @@ test('a batch can be organized into new and existing library folders and collect
   assert.ok(ids.every(id => restored.file(id).folderId === destination))
   assert.ok(restored.snapshot().folders.some(folder => folder.id === newFolder))
   assert.deepEqual(restored.snapshot().folders.find(folder => folder.id === group).members.sort(), [...ids].sort())
+  // An emptied folder simply disappears.
+  const empty = await reopened.removeFolder(newFolder)
+  assert.deepEqual(empty.removedIds, [])
+  assert.ok(!reopened.snapshot().folders.some(folder => folder.id === newFolder))
+  // A folder with photos sends them to Recently deleted, and restoring them brings the folder back.
+  const inFolder = reopened.snapshot().items.filter(item => item.folderId === destination)
+  const removal = await reopened.removeFolder(destination)
+  assert.equal(removal.folderRemoved, inFolder.every(item => item.kind === 'photo'))
+  assert.deepEqual(removal.removedIds.sort(), inFolder.filter(item => item.kind === 'photo').map(item => item.id).sort())
+  assert.ok(removal.removedIds.every(id => !reopened.file(id) && reopened.snapshot().deleted.some(entry => entry.id === id)))
+  await reopened.restoreDeletedPhotos(removal.removedIds)
+  assert.ok(removal.removedIds.every(id => reopened.file(id).folderId === destination))
+  assert.ok(reopened.snapshot().folders.some(folder => folder.id === destination))
+  assert.ok(!(await Library.open(index)).snapshot().folders.some(folder => folder.id === newFolder))
 })
 
 test('group deletion prunes references once and reports recycling failures for managed photos', async t => {

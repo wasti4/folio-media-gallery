@@ -93,7 +93,7 @@ export function LibrarySettings({ close, moved, progress }) {
 
 const pageSize = 48
 
-export function DeletedPhotos({ items, restore, recycle, working }) {
+export function DeletedPhotos({ items, restore, recycle, recycleAll, working }) {
   const { t, language } = useLocale()
   const [requested, setPage] = useState(0)
   const last = Math.max(0, Math.ceil(items.length / pageSize) - 1)
@@ -106,16 +106,21 @@ export function DeletedPhotos({ items, restore, recycle, working }) {
   return <section className="deleted-view" aria-busy={working}>
     <div className="deleted-actions">
       <span>{t('Восстановленные фото вернутся в свои папки и подборки.')}</span>
-      <button type="button" className="outline-button" disabled={working} onClick={() => restore(items.map(item => item.id))}>
-        <RotateCcw size={15} />{t('Восстановить все')}
-      </button>
+      <div className="deleted-bulk">
+        <button type="button" className="outline-button" disabled={working} onClick={() => restore(items.map(item => item.id))}>
+          <RotateCcw size={15} />{t('Восстановить все')}
+        </button>
+        <button type="button" className="danger-button" disabled={working} onClick={recycleAll}>
+          <Trash2 size={15} />{t('Удалить все')}
+        </button>
+      </div>
     </div>
     <div className="deleted-grid">
       {items.slice(page * pageSize, (page + 1) * pageSize).map(item => <article className="media-card deleted-card" key={item.id}>
         <div className="media-thumb"><Picture item={{ ...item, kind: 'photo' }} /></div>
         <div className="card-caption">
           <strong title={item.filename}>{item.name}</strong>
-          <span>{item.folderName}<span className="inline-dot" />{date.format(item.deletedAt)}</span>
+          <span><span className="caption-folder" title={item.folderName}>{item.folderName}</span><span className="inline-dot" /><span className="caption-date">{date.format(item.deletedAt)}</span></span>
         </div>
         <div className="deleted-card-actions">
           <IconButton icon={RotateCcw} label={t('Восстановить «{name}»', { name: item.name })} disabled={working} onClick={() => restore([item.id])} />

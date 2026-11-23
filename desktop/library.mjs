@@ -369,19 +369,23 @@ export class Library {
     })
   }
 
+  trashPhotos(draft, ids) {
+    const deletedAt = Date.now()
+    const removed = detachPhotos(draft, ids, (item, id) => ({
+      item, deletedAt, favorite: Boolean(draft.favorites[id]),
+      openedAt: this.recent.get(id) ?? draft.recent[id] ?? 0, collections: [], roots: [],
+    }))
+    for (const [id, entry] of removed) draft.trash[id] = entry
+    return [...removed.keys()]
+  }
+
+  forgetRecent(result) {
+    for (const id of result.removedIds) this.recent.delete(id)
+    return result
+  }
+
   softDeletePhotos(ids) {
-    return this.update(draft => {
-      const deletedAt = Date.now()
-      const removed = detachPhotos(draft, ids, (item, id) => ({
-        item, deletedAt, favorite: Boolean(draft.favorites[id]),
-        openedAt: this.recent.get(id) ?? draft.recent[id] ?? 0, collections: [], roots: [],
-      }))
-      for (const [id, entry] of removed) draft.trash[id] = entry
-      return { removedIds: [...removed.keys()] }
-    }, result => {
-      for (const id of result.removedIds) this.recent.delete(id)
-      return result
-    })
+    return this.update(draft => ({ removedIds: this.trashPhotos(draft, ids) }), result => this.forgetRecent(result))
   }
 
   restoreDeletedPhotos(ids) {
@@ -648,6 +652,25 @@ export class Library {
 
   removeCollection(id) {
     return this.update(draft => { draft.collections = draft.collections.filter(folder => folder.id !== id) })
+  }
+
+  // Photos in the folder move to Recently deleted, like any other photo deletion, so they stay recoverable.
+  // Videos and GIFs have no deletion flow yet, so a folder that still holds them stays in the list.
+  // Restoring a photo from Recently deleted recreates its folder.
+  removeFolder(id) {
+    return this.update(draft => {
+      const known = draft.folders.some(folder => folder.id === id) ||
+        Object.values(draft.items).some(item => item.folderId === id)
+      if (typeof id !== 'string' || !known) throw new Error('Папка отсутствует в медиатеке.')
+      const photos = Object.values(draft.items).filter(item => item.folderId === id && item.kind === 'photo' && !item.demo)
+      const removedIds = this.trashPhotos(draft, photos.map(item => item.id))
+      const remaining = Object.values(draft.items).filter(item => item.folderId === id).length
+      if (!remaining) {
+        draft.folders = draft.folders.filter(folder => folder.id !== id)
+        if (draft.organizeUndo?.folderId === id) draft.organizeUndo = null
+      }
+      return { removedIds, remaining, folderRemoved: !remaining }
+    }, result => this.forgetRecent(result))
   }
 
   externalTracks(id) {

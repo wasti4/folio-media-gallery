@@ -187,6 +187,7 @@
 :root[data-theme="light"] .dialog-card { background: linear-gradient(145deg, #fffdf6f3, #e8e1d7f6); border-color: #54473746; box-shadow: inset 0 1px #ffffffa8, 0 13px 35px #211a2948; }
 :root[data-theme="light"] .popup:not(.player-menu) .menu-item,
 :root[data-theme="light"] .dialog-card :is(p, .field-label, .icon-button) { color: #2d2822; }
+:root[data-theme="light"] .dialog-card .outline-button { color: #302b25; background: #ffffff5c; border-color: #29231a33; }
 :root[data-theme="light"] .popup:not(.player-menu) :is(.menu-check, .menu-item svg, .menu-heading) { color: #544a3e; }
 :root[data-theme="light"] .popup:not(.player-menu) :is(.menu-item.is-danger, .menu-item.is-danger svg) { color: #913a30; }
 :root[data-theme="light"] .popup:not(.player-menu) .menu-item:hover,

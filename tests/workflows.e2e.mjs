@@ -21,7 +21,7 @@ async function launch(directory) {
   app = await electron.launch({
     args: executable ? [] : ['.'],
     ...(executable && { executablePath: path.resolve(executable) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: directory },
+    env: { ...process.env, FOLIO_TEST_PROFILE: directory },
     timeout: 25000,
   })
   const page = await app.firstWindow()
@@ -64,7 +64,7 @@ async function verifyAnimePlayback(page) {
   const secondAudio = path.join(series, 'Audio', 'Studio B', '02.flac')
   await Promise.all([video, subtitle, firstAudio, secondAudio].map(file => mkdir(path.dirname(file), { recursive: true })))
   const ffmpeg = executable ? path.join(path.dirname(path.resolve(executable)), 'resources', 'ffmpeg', 'ffmpeg.exe') :
-    process.env.LUMA_FFMPEG_DIR ? path.join(process.env.LUMA_FFMPEG_DIR, 'ffmpeg.exe') : 'ffmpeg'
+    process.env.FOLIO_FFMPEG_DIR ? path.join(process.env.FOLIO_FFMPEG_DIR, 'ffmpeg.exe') : 'ffmpeg'
   const make = args => execute(ffmpeg, ['-nostdin', '-v', 'error', ...args], { windowsHide: true, timeout: 20000 })
   await Promise.all([
     make(['-f', 'lavfi', '-i', 'color=black:s=256x144:r=12', '-t', '8', '-an', '-c:v', 'libx264', '-threads', '1', video]),
@@ -110,14 +110,19 @@ try {
   const startup = await app.evaluate(({ BrowserWindow, screen }) => {
     const current = BrowserWindow.getAllWindows()[0]
     const bounds = current.getBounds()
-    return { id: current.id, bounds, area: screen.getDisplayMatching(bounds).workArea, color: current.getBackgroundColor() }
+    const expansion = process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2]) >= 22621
+    return { id: current.id, bounds, area: screen.getDisplayMatching(bounds).workArea, color: current.getBackgroundColor(), expansion }
   })
-  assert.equal(startup.bounds.width, Math.min(760, startup.area.width), 'the first greeting must use a compact native window')
-  assert.equal(startup.bounds.height, Math.min(530, startup.area.height))
-  assert.ok(await page.locator('.intro-frame').evaluate(frame => {
+  assert.equal(startup.bounds.width, Math.min(startup.expansion ? 1312 : 760, startup.area.width))
+  assert.equal(startup.bounds.height, Math.min(startup.expansion ? 850 : 530, startup.area.height))
+  const greeting = await page.locator('.intro-frame').evaluate(frame => {
     const rect = frame.getBoundingClientRect()
-    return rect.left <= 1 && rect.top <= 1 && innerWidth - rect.right <= 1 && innerHeight - rect.bottom <= 1
-  }), 'the intro should cover the native window to its edges')
+    return { width: rect.width, height: rect.height, centered: Math.abs(rect.left - (innerWidth - rect.right)) <= 1 &&
+      Math.abs(rect.top - (innerHeight - rect.bottom)) <= 1 }
+  })
+  assert.equal(greeting.width, Math.min(760, startup.area.width))
+  assert.equal(greeting.height, Math.min(530, startup.area.height))
+  assert.ok(greeting.centered)
   for (const greeting of ['Hello', 'Привет', '你好']) {
     const word = page.getByRole('img', { name: greeting, exact: true })
     await word.waitFor()
@@ -139,11 +144,11 @@ try {
   await page.getByRole('img', { name: 'Hello', exact: true }).waitFor()
   const theme = await page.locator('html').getAttribute('data-theme')
   const surface = await page.locator('.intro-frame').evaluate(frame => getComputedStyle(frame).backgroundColor)
-  assert.notEqual(startup.color, '#000000', 'the native size change needs an opaque background')
+  if (!startup.expansion) assert.notEqual(startup.color, '#000000', 'the native size change needs an opaque background')
   assert.equal(await app.evaluate(({ nativeTheme }) => nativeTheme.themeSource), theme)
   await page.getByRole('combobox', { name: 'Язык интерфейса' }).selectOption('en')
   assert.equal(await page.getByRole('heading', { name: 'All your moments together' }).count(), 0)
-  await page.mouse.click(38, 470)
+  await page.getByRole('button', { name: 'Click to continue', exact: true }).click()
   await page.getByRole('heading', { name: 'All your moments together' }).waitFor()
   assert.equal(await page.locator('.intro-frame').evaluate(frame => getComputedStyle(frame).backgroundColor), surface)
   await screenshot(page, 'folio-intro')
@@ -151,23 +156,41 @@ try {
   await page.getByRole('heading', { name: 'Watch your way' }).waitFor()
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('heading', { name: 'Take your library with you' }).waitFor()
-  await app.evaluate(({ BrowserWindow }) => {
-    const current = BrowserWindow.getAllWindows()[0]
+  await app.evaluate(({ BrowserWindow }, id) => {
+    const current = BrowserWindow.fromId(id)
     globalThis.folioWindowSizes = []
     current.on('resize', () => globalThis.folioWindowSizes.push({
       width: current.getBounds().width, at: performance.now(), color: current.getBackgroundColor(),
     }))
-  })
-  await page.getByRole('button', { name: 'Open Folio', exact: true }).click()
+  }, startup.id)
+  const introduction = page
+  const landing = startup.expansion ?
+    app.windows().find(candidate => candidate.url().includes('intro-landing=1')) ?? app.waitForEvent('window') :
+    page
+  await introduction.getByRole('button', { name: 'Open Folio', exact: true }).click()
+  if (startup.expansion) {
+    await introduction.waitForFunction(() => {
+      const root = document.querySelector('.app-root')
+      return root.getAnimations().some(animation => animation.animationName === 'folio-motion-expand') &&
+        root.querySelector('.feature-image')?.naturalWidth > 0
+    })
+  }
+  page = await landing
+  if (startup.expansion) page.on('pageerror', error => errors.push(error.message))
+  await page.waitForFunction(() => document.querySelector('.window-stage:not([data-onboarding])'))
   await page.getByRole('heading', { name: 'Library', exact: true }).waitFor()
   const arrived = await app.evaluate(({ BrowserWindow }) => {
     const windows = BrowserWindow.getAllWindows()
-    return { count: windows.length, id: windows[0].id, width: windows[0].getBounds().width, sizes: globalThis.folioWindowSizes }
+    return { count: windows.length, id: windows[0].id, width: windows[0].getBounds().width,
+      resizable: windows[0].isResizable(), sizes: globalThis.folioWindowSizes }
   })
   assert.equal(arrived.count, 1)
-  assert.equal(arrived.id, startup.id, 'the greeting and gallery should share the original window')
   assert.equal(arrived.width, Math.min(1312, startup.area.width))
-  if (arrived.width > startup.bounds.width) {
+  assert.ok(arrived.resizable)
+  if (startup.expansion) {
+    assert.ok(introduction.isClosed())
+    assert.equal(arrived.sizes.length, 0, 'the visible expansion should run without native resizes')
+  } else if (arrived.width > startup.bounds.width) {
     assert.ok(new Set(arrived.sizes.map(event => event.width)).size >= 10, 'the native window should grow through intermediate sizes')
     assert.ok(arrived.sizes.at(-1).at - arrived.sizes[0].at < 650, 'the native window should expand promptly')
     assert.ok(arrived.sizes.every(event => event.color === startup.color), 'the background must stay covered until the resize has finished')

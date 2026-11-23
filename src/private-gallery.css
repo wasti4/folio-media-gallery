@@ -1,0 +1,63 @@
+.vault-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background-color: var(--intro-control);
+  padding: 18px;
+}
+.gallery-wrap:has(> .vault-access) { display: grid; min-height: 100%; place-items: center; }
+.gallery-wrap:has(> .vault-access) > .library-header { display: none; }
+.vault-access {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 354px);
+  padding: 23px clamp(16px, 3vw, 24px) 15px;
+  border-radius: 19px;
+  background: linear-gradient(145deg, var(--intro-control-hover), var(--intro-control));
+  box-shadow: 0 20px 44px -22px var(--intro-art-shadow);
+}
+.vault-access-header { display: grid; justify-items: center; gap: 7px; margin-bottom: 8px; text-align: center; }
+.vault-access-header h1 { margin: 0; font-size: 22px; letter-spacing: -.036em; line-height: 1.18; text-wrap: balance; }
+.vault-access-header p { max-width: 34ch; }
+.vault-loading { padding: 18px; text-align: center; }
+.vault-empty h2 { margin: 0; font-size: 18px; letter-spacing: -.025em; }
+.vault-access p, .vault-message, .vault-import-note { margin: 0; color: var(--muted); font-size: 13px; }
+.vault-access label { display: grid; gap: 6px; font-size: 13px; }
+.vault-access input {
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--intro-control);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+.vault-access input:focus-visible { outline: 1px solid var(--text); }
+.vault-emblem {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: linear-gradient(145deg, var(--intro-control-hover), var(--intro-control));
+}
+.vault-access button { white-space: normal; }
+.vault-access-alternate {
+  justify-self: center;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.vault-access-alternate:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
+.vault-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.vault-import-note { margin-bottom: 14px; }
+.vault-thumbnail { display: block; width: 100%; height: 100%; }
+.vault-message, .vault-error { margin: 0 0 10px; }
+.vault-error, .vault-access .vault-error { color: #f2a99d; font-size: 13px; }
+:root[data-theme="light"] .vault-error { color: #9b422d; }
+.vault-empty { display: grid; gap: 10px; justify-items: start; }

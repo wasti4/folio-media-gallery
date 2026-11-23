@@ -17,6 +17,7 @@ const imageKey = item => item.viewUrl + '|' + item.modifiedAt
 export function Viewer({
   item, close, favorite, previous, next, neighbor, direction, startEditing, edited, setWallpaper, remove, blocked,
   playbackProgress, onPlaybackProgress, onFrameSaved,
+  savePrivatePhoto, backLabel,
 }) {
   const { t } = useLocale()
   const frame = useRef(null)
@@ -68,20 +69,20 @@ export function Viewer({
 
   return <section className={'viewer' + (editing ? ' editor-open' : '')} ref={frame} tabIndex={-1} role="dialog" aria-modal="true" aria-label={item.name} onKeyDown={keyboard} inert={blocked}>
     <div className="viewer-background" style={{ backgroundImage: background ? 'url("' + background + '")' : undefined }} />
-    {editing ? <Editor key={item.id} item={item} close={() => {
+    {editing ? <Editor key={item.id} item={item} savePrivatePhoto={savePrivatePhoto} close={() => {
       setEditing(false)
       requestAnimationFrame(() => editButton.current?.focus())
     }} saved={result => { setEditing(false); edited(result) }} /> : <>
     <header className="viewer-top">
-      <button type="button" className="viewer-back glass-button" onClick={close}><ArrowLeft size={17} /> <span>{t('Медиатека')}</span></button>
+      <button type="button" className="viewer-back glass-button" onClick={close}><ArrowLeft size={17} /> <span>{backLabel || t('Медиатека')}</span></button>
       <div className="viewer-heading"><strong title={item.filename}>{item.name}</strong><span>{t(kindNames[item.kind])}{item.kind !== 'gif' && ' · ' + item.ext.toUpperCase()}</span></div>
       <div className="viewer-top-actions">
         {setWallpaper && item.kind === 'photo' && <IconButton icon={Monitor} label={t('Сделать обоями')}
           className="glass-button" onClick={setWallpaper} />}
         {isDesktop && item.kind !== 'gif' && <IconButton icon={SlidersHorizontal} label={t('Редактировать')}
           className="glass-button" ref={editButton} onClick={() => setEditing(true)} />}
-        <IconButton icon={Heart} label={t(item.favorite ? 'Убрать из избранного' : 'В избранное')} aria-pressed={item.favorite}
-          className={'glass-button' + (item.favorite ? ' is-favorite' : '')} onClick={favorite} />
+        {favorite && <IconButton icon={Heart} label={t(item.favorite ? 'Убрать из избранного' : 'В избранное')} aria-pressed={item.favorite}
+          className={'glass-button' + (item.favorite ? ' is-favorite' : '')} onClick={favorite} />}
         {remove && <IconButton icon={Trash2} label={t('Удалить фото')} className="glass-button photo-delete" onClick={remove} />}
         <IconButton icon={X} label={t('Закрыть просмотр')} className="glass-button" onClick={close} />
       </div>

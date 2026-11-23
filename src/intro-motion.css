@@ -1,0 +1,58 @@
+.window-stage[data-intro-motion] {
+  --motion-x: max(0px, (100% - 760px) / 2);
+  --motion-y: max(0px, (100% - 530px) / 2);
+  --motion-ease: cubic-bezier(.42, 0, .19, 1);
+  background: none;
+}
+
+.window-stage[data-intro-motion] .app-root { background: none; }
+.window-stage[data-intro-motion] .glass-grain { visibility: hidden; }
+.window-stage[data-intro-motion] .intro-frame {
+  inset: var(--motion-y) var(--motion-x);
+  border-radius: 8px;
+  container-type: size;
+}
+.window-stage[data-intro-motion] .intro-copy h1 { font-size: clamp(22px, 3.6cqw, 40px); }
+.window-stage[data-intro-motion] .intro-copy p { font-size: clamp(12px, 1.6cqw, 15px); }
+.window-stage[data-intro-motion] .intro-page {
+  gap: clamp(12px, 2.7cqh, 21px);
+  padding-inline: clamp(18px, 4cqw, 42px);
+}
+.window-stage[data-intro-motion] .intro-vault { padding-inline: clamp(15px, 4cqw, 34px); }
+
+.window-stage[data-intro-motion] .app-shell {
+  display: grid;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--gallery-wash), var(--window-surface);
+}
+.window-stage[data-intro-motion]:is([data-onboarding="tour"], [data-onboarding="switching"]) .app-shell { opacity: 0; }
+.window-stage:is([data-intro-motion], [data-onboarding="prepared"], [data-onboarding="settling"]) .app-shell[inert] { filter: none; }
+
+.window-stage[data-intro-motion][data-onboarding="moving"] .app-root {
+  animation: folio-motion-expand .49s var(--motion-ease) both;
+}
+.window-stage[data-intro-motion][data-onboarding="moving"] .intro-frame {
+  animation: folio-motion-flow-out .40s var(--motion-ease) both;
+}
+@keyframes folio-motion-expand {
+  from { clip-path: inset(var(--motion-y) var(--motion-x) round 8px); }
+  to { clip-path: inset(0 round 8px); }
+}
+@keyframes folio-motion-flow-out {
+  0%, 8% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.window-stage:is([data-onboarding="prepared"], [data-onboarding="settling"]) { position: relative; }
+.window-stage:is([data-onboarding="prepared"], [data-onboarding="settling"])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--window-surface);
+}
+.window-stage[data-onboarding="settling"]::before {
+  animation: intro-motion-settle .16s cubic-bezier(.25, .72, .34, 1) both;
+}
+@keyframes intro-motion-settle { to { opacity: 0; } }

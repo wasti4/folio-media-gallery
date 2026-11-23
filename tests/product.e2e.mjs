@@ -18,7 +18,7 @@ let app
 async function launch() {
   app = await electron.launch({
     args: executable ? [] : ['.'], ...(executable && { executablePath: path.resolve(executable) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
   })
   const page = await app.firstWindow()
   page.setDefaultTimeout(10000)
@@ -129,7 +129,7 @@ try {
   await choose([backups])
   await button(settings, 'Choose folder…').click()
   await settings.getByRole('combobox', { name: 'Schedule', exact: true }).selectOption('daily')
-  await page.waitForFunction(async () => (await window.luma.librarySettings()).backup.frequency === 'daily')
+  await page.waitForFunction(async () => (await window.folio.librarySettings()).backup.frequency === 'daily')
   await app.close()
 
   const config = JSON.parse(await readFile(appearance, 'utf8'))
@@ -138,7 +138,7 @@ try {
   page = await launch()
   await button(page, 'Open “Coast”').waitFor()
   const settingsData = await page.waitForFunction(async () => {
-    const next = await window.luma.librarySettings()
+    const next = await window.folio.librarySettings()
     return next.backup.lastSuccessAt ? next : null
   }, undefined, { timeout: 15000 }).then(value => value.jsonValue())
   assert.equal(settingsData.directory, destination)

@@ -52,7 +52,7 @@ try {
   app = await electron.launch({
     args: target ? [] : ['.'],
     ...(target && { executablePath: path.resolve(target) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
     timeout: 25000,
   })
   const page = await app.firstWindow()

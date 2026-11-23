@@ -15,10 +15,12 @@ import { Viewer } from './viewer.jsx'
 import { SeriesView } from './series.jsx'
 import { LibraryFilters, PhotoTagsField } from './library-search.jsx'
 import { DeletedPhotos, LibrarySettings } from './library-settings.jsx'
+import { PrivateGallery } from './private-gallery.jsx'
 import { Intro } from './intro.jsx'
 import { Localization } from './localization.jsx'
 import './style.css'
 import './photo-selection.css'
+import './intro-motion.css'
 import { introResizeDuration, normalizeTheme, windowSurface } from '../shared/brand.mjs'
 import { languages, normalizeLanguage, translate, translateError } from '../shared/locale.mjs'
 import { emptyLibraryFilters, hasLibraryFilters, matchesLibrarySearch } from '../shared/library-search.mjs'
@@ -28,7 +30,7 @@ const folderForms = ['папка', 'папки', 'папок']
 const photoForms = ['фотография', 'фотографии', 'фотографий']
 const duplicateForms = ['дубликат', 'дубликата', 'дубликатов']
 const emptySelection = new Set()
-const scopes = { all: 'Медиатека', favorites: 'Избранное', recent: 'Недавние', series: 'Сериалы', deleted: 'Недавно удалённые' }
+const scopes = { all: 'Медиатека', favorites: 'Избранное', recent: 'Недавние', series: 'Сериалы', deleted: 'Недавно удалённые', vault: 'Приватная папка' }
 const canRemovePhoto = item => isDesktop && item.kind === 'photo' && !item.demo
 const jobLabels = {
   import: 'Копируем в Folio', refresh: 'Обновляем медиатеку', migrate: 'Копируем прежние оригиналы',
@@ -37,6 +39,8 @@ const jobLabels = {
   'index-photos': 'Проверяем даты съёмки',
 }
 const launchOptions = new URLSearchParams(location.search)
+const introMotion = isDesktop && launchOptions.has('intro-motion')
+const introLanding = isDesktop && launchOptions.has('intro-landing')
 const appearance = normalizeTheme(isDesktop ? launchOptions.get('theme') : setting(
   'theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
 ))
@@ -70,12 +74,14 @@ function App() {
   const [expanded, setExpanded] = useState(() => setting('sidebar', false))
   const [language, setLanguage] = useState(initialLanguage)
   const [intro, setIntro] = useState(() => {
+    if (introLanding) return 'prepared'
     const firstRun = isDesktop ? launchOptions.get('intro') === '1' : !setting('onboarded', false)
     return firstRun ? 'tour' : ''
   })
   const [popup, setPopup] = useState(null)
   const [dialog, setDialog] = useState(null)
   const [viewer, setViewer] = useState(null)
+  const [privateViewing, setPrivateViewing] = useState(false)
   const [picked, setPicked] = useState(null)
   const [photoOperation, setPhotoOperation] = useState(null)
   const [busy, setBusy] = useState(null)
@@ -114,7 +120,8 @@ function App() {
 
   const itemById = useMemo(() => new Map(state.items.map(item => [item.id, item])), [state.items])
   const folder = state.folders.find(item => item.id === scope)
-  const galleryScope = scope !== 'series' && scope !== 'deleted'
+  const privateScope = scope === 'vault'
+  const galleryScope = scope !== 'series' && scope !== 'deleted' && !privateScope
   const query = search.trim().toLocaleLowerCase(language)
   const deferredQuery = useDeferredValue(query)
   const current = useMemo(() => {
@@ -154,10 +161,32 @@ function App() {
     else saveSetting('language', next)
   }
 
+  useEffect(() => {
+    if (introLanding) return mediaApi.revealIntroGallery(animate => setIntro(animate ? 'settling' : ''))
+  }, [])
+
   async function finishIntro() {
     if (introFinishing.current) return
     introFinishing.current = true
     const animate = !matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (introMotion) {
+      setIntro(animate ? 'moving' : 'switching')
+      const motion = async () => {
+        await new Promise(resolve => requestAnimationFrame(resolve))
+        const stage = body.current?.closest('.window-stage')
+        const animations = stage?.getAnimations({ subtree: true }).filter(animation =>
+          animation.animationName?.startsWith('folio-motion-')) ?? []
+        await Promise.allSettled(animations.map(animation => animation.finished))
+        await mediaApi.finishIntroMotion()
+      }
+      try {
+        await Promise.all([mediaApi.finishIntro(animate), animate && motion()])
+      } catch (error) {
+        notify(errorText(error), true)
+      }
+      setIntro('')
+      return
+    }
     setIntro('opening')
     try {
       if (isDesktop) await mediaApi.finishIntro(animate)
@@ -299,7 +328,7 @@ function App() {
 
   useEffect(() => {
     function shortcut(event) {
-      if (viewer || dialog || intro || event.defaultPrevented) return
+      if (viewer || dialog || intro || privateScope || event.defaultPrevented) return
       const modifier = event.ctrlKey || event.metaKey
       const key = event.key.toLowerCase()
       const textInput = event.target.closest?.('input, textarea, [contenteditable]')
@@ -331,7 +360,7 @@ function App() {
     }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [viewer, dialog, intro, language, popup, picked, selectable, busy, state.canUndo, folder, scope])
+  }, [viewer, dialog, intro, language, popup, picked, selectable, busy, state.canUndo, folder, scope, privateScope])
 
   function clearSelection(restoreFocus = false) {
     pickAnchor.current = null
@@ -441,7 +470,8 @@ function App() {
       setState(result.state)
       setDialog(null)
       if (result.skipped) notify(t(recycle ? 'Не удалось переместить все копии в корзину Windows.' : 'Часть удалённых файлов недоступна.'), true)
-      else notify(t(recycle ? 'Копия перемещена в корзину Windows' : 'Восстановлено {count}', { count: quantity(result.count, photoForms, language) }))
+      else notify(t(!recycle ? 'Восстановлено {count}' : ids.length > 1 ? 'В корзину Windows перемещено {count}' : 'Копия перемещена в корзину Windows',
+        { count: quantity(result.count ?? ids.length, photoForms, language) }))
     } catch (error) {
       if (recycle) setDialog({ ...dialog, waiting: false })
       notify(errorText(error), true)
@@ -516,12 +546,29 @@ function App() {
   }
 
   async function deleteCollection() {
+    const collection = dialog.folder.kind === 'collection'
+    if (dialog.waiting) return
+    setDialog({ ...dialog, waiting: true })
     try {
-      setState(await mediaApi.removeCollection(dialog.folder.id))
+      if (collection) {
+        setState(await mediaApi.removeCollection(dialog.folder.id))
+        setDialog(null)
+        navigate('all')
+        notify(t('Подборка удалена'))
+        return
+      }
+      const result = await mediaApi.removeFolder(dialog.folder.id)
+      setState(result.state)
       setDialog(null)
-      navigate('all')
-      notify(t('Подборка удалена'))
-    } catch (error) { notify(errorText(error), true) }
+      afterPhotoDeletion(result)
+      if (result.folderRemoved) navigate('all')
+      notify(result.removedIds.length
+        ? t('Удалено {count}', { count: quantity(result.removedIds.length, photoForms, language) })
+        : t('Папка удалена'))
+    } catch (error) {
+      setDialog(current => current && { ...current, waiting: false })
+      notify(errorText(error), true)
+    }
   }
 
   async function confirmPhotoDeletion(ids, item = itemById.get(ids[0])) {
@@ -573,7 +620,10 @@ function App() {
       }
     }
     const role = action === 'move' ? 'folder' : 'trash'
-    return document.querySelector('.selection-dock [data-photo-target="' + role + '"] > svg')
+    const dock = document.querySelector('.selection-dock [data-photo-target="' + role + '"] > svg')
+    if (dock || action !== 'remove') return dock
+    // Without the selection dock, deleted photos fly into the sidebar's Deleted section instead of a floating bin over the toolbar.
+    return document.querySelector('.sidebar [data-destination="deleted"] .side-icon')
   }
 
   async function runPhotoAction(ids, destination) {
@@ -640,11 +690,16 @@ function App() {
   const dragContainsFiles = event => event.dataTransfer.types.includes('Files')
 
   const scene = !isDesktop || launchOptions.has('scene')
+  const prepared = intro === 'prepared' || intro === 'settling'
   return <Localization.Provider value={{ language, t, changeLanguage }}>
-    <div className={'window-stage' + (!isDesktop ? ' web-preview' : '') + (scene ? ' has-scene' : '')} data-onboarding={intro || undefined}><div
+    <div className={'window-stage' + (!isDesktop ? ' web-preview' : '') + (scene ? ' has-scene' : '')}
+      data-onboarding={intro || undefined} data-intro-motion={introMotion ? '' : undefined} data-intro-gallery={prepared && loaded ? '' : undefined}
+      onAnimationEnd={event => {
+        if (event.target === event.currentTarget && event.animationName === 'intro-motion-settle') setIntro('')
+      }}><div
     className={'app-root' + (expanded ? ' sidebar-expanded' : '')}
     onDragEnter={event => {
-      if (!dragContainsFiles(event) || viewer || intro || dialog || mutatingPhotos.current) return
+      if (!dragContainsFiles(event) || privateScope || viewer || intro || dialog || mutatingPhotos.current) return
       event.preventDefault()
       dragDepth.current += 1
       setDragging(true)
@@ -652,7 +707,7 @@ function App() {
     onDragOver={event => {
       if (dragContainsFiles(event)) {
         event.preventDefault()
-        event.dataTransfer.dropEffect = viewer || intro || dialog || mutatingPhotos.current ? 'none' : 'copy'
+        event.dataTransfer.dropEffect = privateScope || viewer || intro || dialog || mutatingPhotos.current ? 'none' : 'copy'
       }
     }}
     onDragLeave={event => {
@@ -664,13 +719,13 @@ function App() {
       event.preventDefault()
       dragDepth.current = 0
       setDragging(false)
-      if (!viewer && !intro && !dialog && !mutatingPhotos.current && event.dataTransfer.files.length) {
+      if (!privateScope && !viewer && !intro && !dialog && !mutatingPhotos.current && event.dataTransfer.files.length) {
         const files = [...event.dataTransfer.files]
         importItems(() => mediaApi.drop(files))
       }
     }}>
     <div className="glass-grain" aria-hidden="true" />
-    <div className="app-shell" inert={Boolean(viewerItem || dialog || intro || photoOperation)} data-viewing={viewerItem ? '' : undefined}
+    <div className="app-shell" inert={Boolean(viewerItem || privateViewing || dialog || intro || photoOperation)} data-viewing={viewerItem || privateViewing ? '' : undefined}
       data-photo-operation={photoOperation && !dialog ? '' : undefined}
       data-arriving={intro === 'arrival' ? '' : undefined} onAnimationEnd={event => {
         if (event.target === event.currentTarget && event.animationName === 'gallery-arrive') setIntro('')
@@ -678,7 +733,7 @@ function App() {
       <Sidebar state={state} active={scope} navigate={navigate} createFolder={() => setDialog({ kind: 'create' })}
         expanded={expanded} setExpanded={resizeSidebar} />
       <div className="app-body" ref={body}>
-        <Titlebar search={search} setSearch={value => { setSearch(value); clearSelection(); scrollRef.current?.scrollTo({ top: 0 }) }}
+        <Titlebar privateScope={privateScope} search={search} setSearch={value => { setSearch(value); clearSelection(); scrollRef.current?.scrollTo({ top: 0 }) }}
           searchRef={searchRef} openImport={showImport} importing={Boolean(busy)}
           changeTheme={changeTheme} openLanguage={event => showPopup(event, 'language')}
           undo={state.canUndo && !busy ? undoMove : undefined}
@@ -690,12 +745,15 @@ function App() {
                 <div>
                 {folder && <button className="breadcrumb" onClick={() => navigate('all')}><ChevronLeft size={15} /> {t('Медиатека')}</button>}
                 <h1>{query && galleryScope ? t('Поиск') : folder?.name || t(scopes[scope] || 'Медиатека')}</h1>
-                  {scope !== 'series' && <div className="page-summary" aria-live="polite">
+                  {scope !== 'series' && !privateScope && <div className="page-summary" aria-live="polite">
                   {loaded ? quantity(scope === 'deleted' ? deleted.length : current.length, fileForms, language) : t('Загружаем медиатеку…')}
-                  {loaded && scope === 'all' && filter === 'all' && !query && <><span className="inline-dot" />{quantity(state.folders.length, folderForms, language)}</>}
+                  {loaded && scope === 'all' && filter === 'all' && !query && <><span className="inline-dot" />{quantity(state.folders.filter(item => item.kind !== 'collection').length, folderForms, language)}</>}
                   </div>}
                 </div>
-              {folder?.kind === 'collection' && <IconButton icon={Trash2} label={t('Удалить подборку')} className="outline-button" onClick={() => setDialog({ kind: 'delete', folder })} />}
+              {(folder?.kind === 'collection' || (folder?.kind === 'physical' && isDesktop && !state.demo)) &&
+                <button type="button" className="outline-button folder-delete" onClick={() => setDialog({ kind: 'delete', folder })}>
+                  <Trash2 size={16} strokeWidth={1.75} /><span>{t(folder.kind === 'collection' ? 'Удалить подборку' : 'Удалить папку')}</span>
+                </button>}
               </div>
               {galleryScope && <GalleryToolbar filter={filter} setFilter={next => { scrollRef.current?.scrollTo({ top: 0 }); clearSelection(); setFilter(next) }}
                 sort={sort} openSort={event => showPopup(event, 'sort')} view={view}
@@ -708,10 +766,13 @@ function App() {
               openEpisode={(item, ordered) => openMedia(item, false, ordered)}
               setWatched={(id, watched) => updatePlayback(id, { watched })} />}
             {scope === 'deleted' && loaded && <DeletedPhotos items={deleted} working={Boolean(photoOperation || busy)}
-              restore={ids => changeDeleted(ids)} recycle={item => setDialog({ kind: 'recycle-deleted', item, trigger: document.activeElement })} />}
+              restore={ids => changeDeleted(ids)} recycle={item => setDialog({ kind: 'recycle-deleted', item, ids: [item.id], trigger: document.activeElement })}
+              recycleAll={() => setDialog({ kind: 'recycle-deleted', ids: deleted.map(item => item.id), trigger: document.activeElement })} />}
+            {privateScope && <PrivateGallery onViewing={setPrivateViewing} view={view}
+              setView={next => { setView(next); saveSetting('view', next) }} />}
             {feature && <Feature item={feature} open={() => openMedia(feature)} favorite={() => toggleFavorite(feature.id)} />}
             {galleryScope && <section id="gallery-panel" role="tabpanel" aria-labelledby={'tab-' + filter} className="gallery-panel">
-              {loaded && (!intro || intro === 'arrival') && (current.length ? <GalleryGrid items={current} view={view} key={scope + ':' + filter + ':' + view}
+              {loaded && (!intro || intro === 'arrival' || introMotion || prepared) && (current.length ? <GalleryGrid items={current} view={view} key={scope + ':' + filter + ':' + view}
                 selecting={selecting} picked={picked ?? emptySelection} choose={choosePhoto}
                 onOpen={openMedia} favorite={toggleFavorite} onMenu={(event, item) => showPopup(event, 'item', item)} /> :
                 <EmptyGallery search={query || hasLibraryFilters(libraryFilters)} scope={scope} filter={filter} collection={folder?.kind === 'collection'}
@@ -782,11 +843,23 @@ function App() {
           <button className="primary-button" type="submit" disabled={dialog.waiting}>{t('Создать')}</button></div>
       </form>
     </Dialog>}
-    {dialog?.kind === 'delete' && <Dialog title={t('Удалить подборку')} onClose={() => setDialog(null)}>
-      <p>{t('Подборка «{name}» будет удалена из медиатеки.', { name: dialog.folder.name })}</p>
-      <div className="dialog-actions"><button className="outline-button" autoFocus onClick={() => setDialog(null)}>{t('Отмена')}</button>
-        <button className="danger-button" onClick={deleteCollection}>{t('Удалить')}</button></div>
-    </Dialog>}
+    {dialog?.kind === 'delete' && (() => {
+      const collection = dialog.folder.kind === 'collection'
+      const inside = collection ? [] : state.items.filter(item => item.folderId === dialog.folder.id)
+      const photos = inside.filter(item => item.kind === 'photo').length
+      const others = inside.length - photos
+      return <Dialog title={t(collection ? 'Удалить подборку' : 'Удалить папку')} onClose={() => { if (!dialog.waiting) setDialog(null) }}>
+        {collection ? <p>{t('Подборка «{name}» будет удалена из медиатеки.', { name: dialog.folder.name })}</p> : <>
+          <p>{photos ? t('{count} из папки «{name}» переместятся в «Недавно удалённые». Оттуда их можно восстановить.', {
+            count: quantity(photos, photoForms, language), name: dialog.folder.name,
+          }) : t('Пустая папка «{name}» исчезнет из списка. Файлы не затрагиваются.', { name: dialog.folder.name })}</p>
+          {others > 0 && <p>{t('Видео и GIF ({count}) останутся, поэтому папка сохранится.', { count: others })}</p>}
+        </>}
+        <div className="dialog-actions"><button className="outline-button" autoFocus disabled={dialog.waiting} onClick={() => setDialog(null)}>{t('Отмена')}</button>
+          <button className="danger-button" disabled={dialog.waiting || (!collection && others > 0 && !photos)} onClick={deleteCollection}>
+            {t(!collection && photos ? 'Удалить вместе с фото' : 'Удалить')}</button></div>
+      </Dialog>
+    })()}
     {dialog?.kind === 'create-photo-folder' && <Dialog title={t('Новая папка')} onClose={cancelPhotoDialog}>
       <form onSubmit={createPhotoFolder}>
         <label className="field-label">{t('Название')}<input name="name" type="text" placeholder={t('Например, Путешествия')} maxLength={70} autoFocus required disabled={dialog.waiting} /></label>
@@ -806,9 +879,11 @@ function App() {
       </form>
     </Dialog>}
     {dialog?.kind === 'recycle-deleted' && <Dialog title={t('В корзину Windows')} onClose={cancelPhotoDialog}>
-      <p>{t('Копия «{name}» будет перемещена в корзину Windows.', { name: dialog.item.name })}</p>
+      <p>{dialog.item ? t('Копия «{name}» будет перемещена в корзину Windows.', { name: dialog.item.name })
+        : t('Все удалённые фото ({count}) будут перемещены в корзину Windows. В Folio их уже не восстановить.', { count: dialog.ids.length })}</p>
       <div className="dialog-actions"><button className="outline-button" autoFocus disabled={dialog.waiting} onClick={cancelPhotoDialog}>{t('Отмена')}</button>
-        <button className="danger-button photo-delete-confirm" disabled={dialog.waiting} onClick={() => changeDeleted([dialog.item.id], true)}>{t('Переместить')}</button></div>
+        <button className="danger-button photo-delete-confirm" disabled={dialog.waiting} onClick={() => changeDeleted(dialog.ids, true)}>
+          <Trash2 size={15} aria-hidden="true" /> {t(dialog.item ? 'Переместить' : 'Удалить все')}</button></div>
     </Dialog>}
     {dialog?.kind === 'remove-photo' && <Dialog title={t(singleRemoval ? 'Удалить фото' : 'Удалить фотографии')} onClose={cancelPhotoDialog}>
       <p>{singleRemoval
@@ -852,7 +927,7 @@ function App() {
       }}>{t(toast.openFolder.photo ? 'Открыть фото' : 'Открыть папку')}</button>}
       <IconButton icon={X} size={14} label={t('Скрыть уведомление')} onClick={() => setToast(null)} />
     </div>}
-    {intro && <Intro phase={intro} finish={finishIntro} />}
+    {intro && !prepared && <Intro phase={intro} finish={finishIntro} warmGallery={introMotion ? mediaApi.warmIntroGallery : undefined} />}
   </div></div></Localization.Provider>
 }
 

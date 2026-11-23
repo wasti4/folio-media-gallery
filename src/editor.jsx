@@ -1,22 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  ArrowLeft, ArrowRightToLine, ArrowLeftToLine, Crop, FlipHorizontal2, FlipVertical2, LoaderCircle, Play, RotateCcw, RotateCw,
-  Save, ScanEye, Scissors, SlidersHorizontal, Square,
+  ArrowLeft, ArrowRightToLine, ArrowLeftToLine, Crop, FlipHorizontal2, FlipVertical2, LoaderCircle, Play, Redo2, RotateCcw, RotateCw,
+  Save, ScanEye, Scissors, SlidersHorizontal, Square, Undo2,
 } from 'lucide-react'
 import { flipEdit, fullCrop, hasCrop, hasEdit, limit, minimumCrop, newEdit, rotateEdit } from '../shared/edits.mjs'
 import { photoGeometry } from '../shared/photo-look.mjs'
+import { defaultLookAmount, withLook } from '../shared/photo-looks.mjs'
 import { translateError } from '../shared/locale.mjs'
 import { useLocale } from './localization.jsx'
 import { mediaApi, setting } from './media-api.mjs'
 import { IconButton } from './ui.jsx'
-import { PhotoPreview } from './photo-preview.jsx'
+import { encodePrivateEdit, PhotoPreview, privateEditPreview } from './photo-preview.jsx'
+import { AdjustmentGroups, Histogram, LookPicker } from './editor-inspector.jsx'
 import './editor.css'
 
-const adjustments = [
-  ['exposure', 'Экспозиция', -100, true], ['brightness', 'Яркость'], ['contrast', 'Контраст'],
-  ['shadows', 'Тени', -100, true], ['highlights', 'Светлые участки', -100, true],
-  ['saturation', 'Насыщенность'], ['warmth', 'Теплота', -100, true], ['sharpness', 'Резкость', 0],
-]
+const historyLimit = 100
+const historyMergeWindow = 900
+const holdToCompare = 260
 const tabs = [
   { id: 'adjust', name: 'Коррекция', Icon: SlidersHorizontal },
   { id: 'crop', name: 'Кадр', Icon: Crop },
@@ -95,14 +95,6 @@ function CropFrame({ crop, change }) {
   </div>
 }
 
-function Adjustment({ label, value, min = -100, change }) {
-  const style = { '--range-fill': (value - min) / (100 - min) * 100 + '%' }
-  return <label className="editor-adjustment">
-    <span><span>{label}</span><output>{value > 0 && min < 0 ? '+' : ''}{value}</output></span>
-    <input type="range" aria-label={label} min={min} max={100} value={value} style={style} onChange={event => change(event.target.valueAsNumber)} />
-  </label>
-}
-
 function TrimFields({ edit, duration, at, point }) {
   const { t } = useLocale()
   const step = Math.min(duration, 0.01)
@@ -121,13 +113,16 @@ function TrimFields({ edit, duration, at, point }) {
   </>
 }
 
-export function Editor({ item, close, saved }) {
+export function Editor({ item, close, saved, savePrivatePhoto }) {
   const { t, language } = useLocale()
   const video = item.kind === 'video'
   const [info, setInfo] = useState(null)
   const [edit, setEdit] = useState(newEdit())
+  const [look, setLook] = useState(null)
   const [tool, setTool] = useState('adjust')
   const [original, setOriginal] = useState(false)
+  const [peek, setPeek] = useState(false)
+  const [, setHistoryVersion] = useState(0)
   const [position, setPosition] = useState(0)
   const [streamTime, setStreamTime] = useState(0)
   const [clip, setClip] = useState(null)
@@ -144,24 +139,33 @@ export function Editor({ item, close, saved }) {
   const clipRef = useRef(null)
   const clipSerial = useRef(0)
   const alive = useRef(true)
+  const privateSource = useRef(null)
   const outputInFlight = useRef(false)
+  const history = useRef({ past: [], future: [], key: null, at: 0 })
+  const latest = useRef(null)
+  const shortcuts = useRef(null)
+  const hold = useRef({ timer: 0, active: false, suppressClick: false })
+  latest.current = { edit, look }
   const duration = info?.duration || 0
-  const cropMode = tool === 'crop' && !original
+  // The look only exists for photos; videos keep exporting their manual adjustments.
+  const tone = video ? edit : withLook(edit, look)
+  const showOriginal = original || peek
+  const cropMode = tool === 'crop' && !showOriginal
   const frameOptions = video && JSON.stringify({
     edit: cropMode ? { ...edit, crop: fullCrop } : edit,
-    at: position, original, unframed: cropMode,
+    at: position, original: showOriginal, unframed: cropMode,
   })
-  const changed = hasEdit(edit, duration)
+  const changed = hasEdit(tone, duration)
   const frameCurrent = frame && (!video || (frame.unframed === cropMode && frame.rotation === edit.rotation &&
-    frame.original === original && frame.flipX === edit.flipX && frame.flipY === edit.flipY))
-  const liveEdit = original ? newEdit() : cropMode ? { ...edit, crop: fullCrop } : edit
+    frame.original === showOriginal && frame.flipX === edit.flipX && frame.flipY === edit.flipY))
+  const liveEdit = showOriginal ? newEdit() : cropMode ? { ...tone, crop: fullCrop } : tone
   const liveGeometry = !video && frame ? photoGeometry(frame.width, frame.height, liveEdit) : null
   const transposed = edit.rotation % 2 === 1
-  const outputCrop = original ? fullCrop : edit.crop
-  const sideways = transposed && !original
+  const outputCrop = showOriginal ? fullCrop : edit.crop
+  const sideways = transposed && !showOriginal
   const outputWidth = Math.max(1, Math.floor(((sideways ? info?.height : info?.width) || 1) * outputCrop.width))
   const outputHeight = Math.max(1, Math.floor(((sideways ? info?.width : info?.height) || 1) * outputCrop.height))
-  const fallback = transposed && !original ? (info?.height || 16) / (info?.width || 9) : (info?.width || 16) / (info?.height || 9)
+  const fallback = transposed && !showOriginal ? (info?.height || 16) / (info?.width || 9) : (info?.width || 16) / (info?.height || 9)
   const size = clip ? clipSize : liveGeometry || frame
   const ratio = size?.width && size.height ? size.width / size.height : fallback
   const cropAspect = cropMode && frameCurrent ? ratio : fallback
@@ -181,6 +185,7 @@ export function Editor({ item, close, saved }) {
 
   useEffect(() => {
     alive.current = true
+    if (savePrivatePhoto) return () => { alive.current = false; privateSource.current = null }
     mediaApi.editInfo(item.id).then(result => {
       if (!alive.current) return
       setInfo(result)
@@ -198,17 +203,40 @@ export function Editor({ item, close, saved }) {
       mediaApi.stopEditPreview().catch(() => {})
       unsubscribe()
     }
-  }, [item.id, language])
+  }, [item.id, language, Boolean(savePrivatePhoto)])
 
   useEffect(() => {
-    const escape = event => {
-      if (event.key === 'Escape' && !event.defaultPrevented && !outputInFlight.current) {
+    const keydown = event => {
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape' && !outputInFlight.current) {
         event.preventDefault()
         close()
+        return
+      }
+      const modifier = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      if (modifier && !event.altKey && ['z', 'я', 'y', 'н'].includes(key)) {
+        event.preventDefault()
+        shortcuts.current?.travel(['z', 'я'].includes(key) && !event.shiftKey)
+        return
+      }
+      // Backslash peeks at the original while held, matching common photo editors. The physical key works in any layout.
+      if (event.code === 'Backslash' && !modifier && !event.altKey) {
+        event.preventDefault()
+        setPeek(true)
       }
     }
-    window.addEventListener('keydown', escape)
-    return () => window.removeEventListener('keydown', escape)
+    const keyup = event => { if (event.code === 'Backslash') setPeek(false) }
+    const blur = () => setPeek(false)
+    window.addEventListener('keydown', keydown)
+    window.addEventListener('keyup', keyup)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', keydown)
+      window.removeEventListener('keyup', keyup)
+      window.removeEventListener('blur', blur)
+      clearTimeout(hold.current.timer)
+    }
   }, [close])
 
   useEffect(() => {
@@ -216,12 +244,22 @@ export function Editor({ item, close, saved }) {
     let current = true
     async function load() {
       try {
-        const url = await mediaApi.editFrame(item.id, { original: true })
+        const url = savePrivatePhoto ? item.viewUrl : await mediaApi.editFrame(item.id, { original: true })
         if (!url || !current) return
         const image = new Image()
         image.src = url
         await image.decode()
-        if (current) setFrame({ image, width: image.naturalWidth, height: image.naturalHeight })
+        if (!current) return
+        if (savePrivatePhoto) {
+          if (image.naturalWidth * image.naturalHeight > 32_000_000) {
+            setError(t('Редактор приватных фото поддерживает снимки до 32 Мп.'))
+            return
+          }
+          privateSource.current = image
+          setInfo({ width: image.naturalWidth, height: image.naturalHeight, duration: 0 })
+          const preview = privateEditPreview(image)
+          setFrame({ image: preview, width: preview.naturalWidth ?? preview.width, height: preview.naturalHeight ?? preview.height })
+        } else setFrame({ image, width: image.naturalWidth, height: image.naturalHeight })
       } catch (failure) {
         if (current) setError(translateError(language, failure, 'Не удалось подготовить предпросмотр.'))
       } finally {
@@ -230,7 +268,7 @@ export function Editor({ item, close, saved }) {
     }
     load()
     return () => { current = false }
-  }, [video, item.id, language])
+  }, [video, item.id, language, Boolean(savePrivatePhoto)])
 
   useEffect(() => {
     if (!video || !info || clip || clipLoading || saving) return
@@ -268,11 +306,73 @@ export function Editor({ item, close, saved }) {
     setClipSize(null)
   }
 
-  function changeEdit(changer) {
+  // Successive changes with the same key, such as one slider drag, become a single undo step.
+  function record(key = null) {
+    const log = history.current
+    const now = performance.now()
+    if (!key || key !== log.key || now - log.at > historyMergeWindow) {
+      log.past.push(latest.current)
+      if (log.past.length > historyLimit) log.past.shift()
+      log.future = []
+      setHistoryVersion(version => version + 1)
+    }
+    log.key = key
+    log.at = now
+  }
+
+  function travel(back) {
+    const log = history.current
+    const from = back ? log.past : log.future
+    if (!from.length || outputInFlight.current) return
     if (clipRef.current || clipLoading) stopClip()
+    ;(back ? log.future : log.past).push(latest.current)
+    const snapshot = from.pop()
+    log.key = null
+    setOriginal(false)
+    setError('')
+    setEdit(snapshot.edit)
+    setLook(snapshot.look)
+    setHistoryVersion(version => version + 1)
+  }
+  shortcuts.current = { travel }
+
+  function changeEdit(changer, key) {
+    if (clipRef.current || clipLoading) stopClip()
+    record(key)
     setOriginal(false)
     setError('')
     setEdit(changer)
+  }
+
+  function pickLook(id) {
+    if (id === (look?.id ?? null)) return
+    record()
+    setOriginal(false)
+    setError('')
+    setLook(id ? { id, amount: look?.amount ?? defaultLookAmount } : null)
+  }
+
+  function changeLookAmount(amount) {
+    record('look-amount')
+    setOriginal(false)
+    setLook(current => current && { ...current, amount })
+  }
+
+  function beginHold(event) {
+    if (event.button !== 0 || saving || !info) return
+    clearTimeout(hold.current.timer)
+    hold.current.timer = setTimeout(() => {
+      hold.current.active = true
+      setPeek(true)
+    }, holdToCompare)
+  }
+
+  function endHold(clickFollows) {
+    clearTimeout(hold.current.timer)
+    if (!hold.current.active) return
+    hold.current.active = false
+    hold.current.suppressClick = clickFollows
+    setPeek(false)
   }
 
   function pickTool(value) {
@@ -282,6 +382,10 @@ export function Editor({ item, close, saved }) {
   }
 
   function switchOriginal() {
+    if (hold.current.suppressClick) {
+      hold.current.suppressClick = false
+      return
+    }
     if (clipRef.current || clipLoading) stopClip()
     setOriginal(matching => !matching)
   }
@@ -289,7 +393,7 @@ export function Editor({ item, close, saved }) {
   function point(side, seconds) {
     const margin = Math.min(duration, 0.08)
     const time = side === 'start' ? limit(seconds, 0, edit.end - margin) : limit(seconds, edit.start + margin, duration)
-    changeEdit(current => ({ ...current, [side]: time }))
+    changeEdit(current => ({ ...current, [side]: time }), 'trim-' + side)
     setPosition(time)
   }
 
@@ -332,7 +436,13 @@ export function Editor({ item, close, saved }) {
     setProgress(0)
     setError('')
     try {
-      const result = await mediaApi.saveEdit(item.id, edit)
+      if (savePrivatePhoto) {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        if (!alive.current || !privateSource.current) return
+      }
+      const result = savePrivatePhoto
+        ? await savePrivatePhoto(item.id, encodePrivateEdit(privateSource.current, tone))
+        : await mediaApi.saveEdit(item.id, tone)
       if (result && alive.current) saved(result)
     } catch (failure) {
       if (alive.current) setError(translateError(language, failure, 'Не удалось сохранить копию.'))
@@ -344,7 +454,12 @@ export function Editor({ item, close, saved }) {
 
   function reset() {
     changeEdit(() => newEdit(duration))
+    setLook(null)
     setPosition(0)
+  }
+
+  function resetAdjustments(keys) {
+    changeEdit(current => ({ ...current, ...Object.fromEntries(keys.map(key => [key, 0])) }))
   }
 
   return <>
@@ -354,6 +469,12 @@ export function Editor({ item, close, saved }) {
       </button>
       <div className="editor-title"><strong>{title}</strong><span title={item.filename}>{item.name}</span></div>
       <div className="editor-header-actions">
+        <div className="editor-history" role="group" aria-label={t('История правок')}>
+          <IconButton icon={Undo2} size={16} className="editor-tool" label={t('Отменить шаг')}
+            disabled={!history.current.past.length || saving} onClick={() => travel(true)} />
+          <IconButton icon={Redo2} size={16} className="editor-tool" label={t('Повторить шаг')}
+            disabled={!history.current.future.length || saving} onClick={() => travel(false)} />
+        </div>
         <IconButton icon={RotateCcw} className="editor-tool" label={t('Сбросить правки')} disabled={!changed || saving} onClick={reset} />
         <button type="button" className="primary-button editor-save" disabled={!info || !changed || saving} onClick={save}>
           <Save size={15} /><span>{t('Сохранить копию')}</span>
@@ -378,7 +499,11 @@ export function Editor({ item, close, saved }) {
               }} /> : liveGeometry ? <PhotoPreview image={frame.image} edit={liveEdit} geometry={liveGeometry} label={item.name} /> :
                 <img src={frame?.url || item.preview} alt={item.name} draggable="false" />}
             {!clip && cropMode && frameCurrent && !saving && <CropFrame crop={edit.crop}
-              change={crop => setEdit(current => ({ ...current, crop }))} />}
+              change={crop => {
+                record('crop')
+                setEdit(current => ({ ...current, crop }))
+              }} />}
+            {showOriginal && (frame || clip) && <span className="editor-original-badge" aria-hidden="true">{t('Исходник')}</span>}
           </div>
           {!frame && !error && <div className="editor-indicator" role="status"><LoaderCircle size={17} />{t('Готовим предпросмотр')}</div>}
         </div>
@@ -393,7 +518,9 @@ export function Editor({ item, close, saved }) {
           </div>}
           {video && duration > 0 && <span className="editor-time">{editTime(at)} <span>/</span> {editTime(duration)}</span>}
           {!video && frame && <span className="editor-format">{outputWidth} × {outputHeight}</span>}
-          <button type="button" className="editor-button editor-compare" aria-pressed={original} onClick={switchOriginal} disabled={saving || !info}>
+          <button type="button" className="editor-button editor-compare" aria-pressed={original} onClick={switchOriginal}
+            onPointerDown={beginHold} onPointerUp={() => endHold(true)} onPointerLeave={() => endHold(false)}
+            onPointerCancel={() => endHold(false)} title={t('Нажмите, чтобы сравнить, или удерживайте')} disabled={saving || !info}>
             <ScanEye size={16} /><span>{t('Исходник')}</span>
           </button>
         </div>
@@ -403,9 +530,14 @@ export function Editor({ item, close, saved }) {
           {tabs.filter(tab => tab.id !== 'trim' || duration > 0).map(({ id, name, Icon }) => <button key={id} type="button"
             aria-pressed={tool === id} disabled={saving || !info} onClick={() => pickTool(id)}><Icon size={15} />{t(name)}</button>)}
         </div>
+        <div className="editor-panel-body">
         <fieldset className="editor-fields" disabled={saving || !info}>
-          {tool === 'adjust' && adjustments.filter(([, , , photoOnly]) => !photoOnly || !video).map(([key, name, min]) => <Adjustment key={key} label={t(name)} value={edit[key]}
-            min={min} change={value => changeEdit(current => ({ ...current, [key]: value }))} />)}
+          {tool === 'adjust' && <>
+            {!video && frame?.image && <Histogram image={frame.image} edit={liveEdit} />}
+            {!video && frame?.image && <LookPicker image={frame.image} look={look} pick={pickLook} amount={changeLookAmount} />}
+            <AdjustmentGroups edit={edit} video={video} reset={resetAdjustments}
+              change={(key, value) => changeEdit(current => ({ ...current, [key]: value }), 'adjust-' + key)} />
+          </>}
           {tool === 'crop' && <>
             <span className="editor-field-title">{t('Формат кадра')}</span>
             <div className="editor-aspects">
@@ -424,6 +556,7 @@ export function Editor({ item, close, saved }) {
           </>}
           {tool === 'trim' && duration > 0 && <TrimFields edit={edit} duration={duration} at={at} point={point} />}
         </fieldset>
+        </div>
         {error && <p className="editor-error" role="alert">{error}</p>}
         {previewing && frame && !saving && !clip && <span className="editor-previewing" role="status">{t('Готовим предпросмотр')}</span>}
         {saving ? <div className="editor-export" role="status">

@@ -67,7 +67,7 @@ function photoCube(edit) {
 function toolError(error, fallback) {
   if (error.code === 'ENOENT') return new Error('Для этого формата требуется FFmpeg с FFprobe.')
   if (/no space left|not enough space|disk is full/i.test(error.stderr || error.message)) return new Error('Недостаточно места на диске.')
-  if (process.env.LUMA_DEBUG && error.stderr) console.error(String(error.stderr).slice(-2000))
+  if (process.env.FOLIO_DEBUG && error.stderr) console.error(String(error.stderr).slice(-2000))
   return new Error(fallback)
 }
 
@@ -289,7 +289,7 @@ export class MediaEditor {
         windowsHide: true, timeout: 18000, env: { ...process.env, FOLIO_WALLPAPER_FILE: file },
       })
     } catch (error) {
-      if (process.env.LUMA_DEBUG && error.stderr) console.error(String(error.stderr).slice(-2000))
+      if (process.env.FOLIO_DEBUG && error.stderr) console.error(String(error.stderr).slice(-2000))
       throw new Error('Не удалось установить обои.')
     }
   }

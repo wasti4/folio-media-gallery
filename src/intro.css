@@ -44,7 +44,7 @@
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .intro-frame:not([data-phase="tour"]) { pointer-events: none; }
-.intro-frame:not([data-phase="tour"]) :is(.intro-header, .intro-footer, .intro-pages, .intro-greetings) {
+.intro-frame:not([data-phase="tour"], [data-phase="moving"], [data-phase="switching"]) :is(.intro-header, .intro-footer, .intro-pages, .intro-greetings) {
   opacity: 0;
   transform: translateY(-7px) scale(.988);
 }
@@ -81,6 +81,8 @@
 }
 .intro-language-control { position: relative; display: inline-flex; }
 .intro-frame .intro-language { appearance: none; padding-inline-end: 30px; cursor: pointer; }
+.intro-language option { background-color: #252525; color: #f0f0f0; }
+:root[data-theme="light"] .intro-language option { background-color: #f8f7f4; color: #1e1c19; }
 .intro-language-chevron {
   position: absolute;
   inset-inline-end: 11px;

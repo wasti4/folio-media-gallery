@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { luminanceWeights, photoLookup, sharpWeight } from '../shared/photo-look.mjs'
+import { luminanceWeights, photoGeometry, photoLookup, sharpWeight } from '../shared/photo-look.mjs'
 
 const vertexSource = `#version 300 es
 void main() {
@@ -117,8 +117,8 @@ const byte = value => Math.max(0, Math.min(255, Math.round(value)))
 function canvasPreview(canvas, image) {
   const context = canvas.getContext('2d')
   const source = document.createElement('canvas')
-  source.width = image.naturalWidth
-  source.height = image.naturalHeight
+  source.width = image.naturalWidth ?? image.width
+  source.height = image.naturalHeight ?? image.height
   const reader = source.getContext('2d', { willReadFrequently: true })
   reader.drawImage(image, 0, 0)
   const pixels = reader.getImageData(0, 0, source.width, source.height).data
@@ -164,6 +164,42 @@ function canvasPreview(canvas, image) {
       }
       context.putImageData(result, 0, 0)
     },
+  }
+}
+
+export function privateEditPreview(image, maxWidth = 1152, maxHeight = 900) {
+  const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight)
+  if (scale === 1) return image
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
+  return canvas
+}
+
+export function encodePrivateEdit(image, edit) {
+  const geometry = photoGeometry(image.naturalWidth, image.naturalHeight, edit)
+  let canvas = document.createElement('canvas')
+  const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true })
+  const largest = Math.max(image.naturalWidth, image.naturalHeight)
+  let painter
+  try {
+    if (gl && largest <= gl.getParameter(gl.MAX_TEXTURE_SIZE) && largest <= gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)) {
+      try {
+        painter = webglPreview(canvas, image, gl)
+        painter.draw(edit, geometry)
+        if (gl.getError() === gl.NO_ERROR && gl.drawingBufferWidth === geometry.width && gl.drawingBufferHeight === geometry.height) {
+          return canvas.toDataURL('image/png')
+        }
+      } catch { /* The software painter handles devices with restricted WebGL buffers. */ }
+    }
+    canvas.width = canvas.height = 1
+    canvas = document.createElement('canvas')
+    canvasPreview(canvas, image).draw(edit, geometry)
+    return canvas.toDataURL('image/png')
+  } finally {
+    painter?.dispose()
+    canvas.width = canvas.height = 1
   }
 }
 

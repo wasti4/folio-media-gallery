@@ -1,67 +1,156 @@
-# Folio
+<p align="center">
+  <img src="docs/branding/folio.svg" width="96" alt="Folio logo">
+</p>
 
-Folio is a local media gallery for Windows 10 and later (x64). Browse photos, GIFs, and videos, organize a library, and watch series with external audio and subtitles.
+<h1 align="center">Folio</h1>
 
-Find installers in [GitHub Releases](https://github.com/wasti4/folio-media-gallery/releases). The installer updates an existing per-user installation. After a local installer build, run `release/Folio-<version>-Setup.exe`. For the portable build, keep the `release/Folio-<version>/` folder intact and run `Folio.exe` from it.
+<p align="center">
+  <b>Photos, videos and series in one calm library that never leaves your disk.</b><br>
+  A fast, private media gallery and player for Windows.
+</p>
 
-## Library
+<p align="center">
+  <a href="https://github.com/wasti4/folio-media-gallery/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/wasti4/folio-media-gallery?style=flat-square&color=5b6cff"></a>
+  <a href="https://github.com/wasti4/folio-media-gallery/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/wasti4/folio-media-gallery/total?style=flat-square&color=22c55e"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/wasti4/folio-media-gallery?style=flat-square&color=8b8b97"></a>
+</p>
 
-- Use **Import** to add files or whole folders, or drag them into the window. Folio copies originals into its library at `%APPDATA%\Luma\Library\Media` by default.
-- **Library settings** shows the current location, media size, cache size, and free space. **Move library…** verifies copied files before switching to the new location.
-- When upgrading a legacy library that links to originals, Folio copies any originals it can access. Reconnect a missing source drive and use **Copy existing originals** to finish.
-- Expand the sidebar to browse folders and create collections. Use a card's menu to add media to collections or edit tags.
-- Press `Ctrl+K` to search and `Ctrl+O` to choose files. Filter by year, month, date range, tag, or folder. Capture-date sorting uses image metadata where available. Folio offers to skip exact duplicates during import.
-- In the viewer, double-click to zoom toward the pointer or return to fit. Scroll to zoom and drag with the left mouse button to pan. Arrow keys move between photos. Folio respects Windows' reduced-motion setting.
-- **Delete photo** moves the library copy to **Recently deleted**, shown as **Deleted** in the sidebar. Restore photos to their previous folders and collections or send them to the Windows Recycle Bin.
-- **Select** enables batch actions. Use `Shift`-click to select a range or `Ctrl+A` for all photos in the current view. The selection bar moves photos, adds them to a collection, or deletes them. `Ctrl+Z` undoes the last batch move.
-- On Windows 11, the window uses system Acrylic. Its appearance depends on the desktop and the Windows transparency setting. The web preview uses a blurred landscape.
-- Click or drag the theme switch beside **Import**. With the switch focused, the arrow keys choose dark or light. Your choice is saved.
-- Click the first-launch greeting to open the tour, or choose **Skip** to go straight to the library. To replay it, close Folio and start it with `Folio.exe --intro`. The tour uses the gallery theme, which initially follows Windows.
-- Choose English, Russian, or Simplified Chinese during onboarding or through the globe button.
+<p align="center">
+  <a href="../../releases/latest"><b>Download for Windows</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#build-from-source">Build from source</a>
+</p>
 
-## Back up or move a library
+<p align="center">
+  <a href="docs/demo/folio-demo.mp4"><img src="docs/demo/folio-preview.webp" alt="Folio demo: library, viewer, photo editor and private folder"></a>
+</p>
 
-Choose **Import → Create backup…** and select a destination. The resulting `Folio-…` folder contains originals, external audio, subtitles, collections, favorites, and viewing history. Copy the entire folder to another drive or computer.
+<p align="center"><sub>Click the preview for the full demo at 60 fps.</sub></p>
 
-In **Library settings**, choose a backup destination and a daily or weekly schedule. Automatic backups run while Folio is open. The settings show the last successful automatic backup.
+## Why Folio
 
-On the new computer, choose **Import → Restore from backup…** and select the `Folio-…` folder. Folio verifies checksums in newer backups and merges their contents into the current library.
+- **Your files stay yours.** Originals are copied into a library on your own disk. No account, no cloud, no telemetry.
+- **Made for series.** Episodes group into seasons, and external dubs and subtitles are matched automatically.
+- **Private when it matters.** An encrypted folder that locks itself the moment you step away.
 
-## Editor and wallpaper
+## Screenshots
 
-- Open a photo or video and choose **Edit** to crop, rotate, or adjust brightness, contrast, saturation, and sharpness. Use **Original** to compare with the source.
-- Photo adjustments update as you drag the sliders. Additional controls cover exposure, shadows, highlights, and warmth. The **Crop** tab supports horizontal and vertical flips.
-- For video, use **Trim** to set the start and end. Preview the selected range with adjustments applied.
-- **Save copy** adds a new file beside the original in the library. Photos are exported as PNG and videos as MP4 with embedded audio.
-- **Set as wallpaper** is available from a photo card's menu and from the viewer. Edited copies work as wallpaper too.
+<table>
+  <tr>
+    <td><img src="docs/screenshots/library.webp" alt="Folio library with folders, a collection and an artwork grid"></td>
+    <td><img src="docs/screenshots/editor.webp" alt="Photo editor with looks, a histogram and light controls"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/private-folder.webp" alt="Unlocked private folder with encrypted photos"></td>
+    <td><img src="docs/screenshots/light.webp" alt="Folio library in the light theme"></td>
+  </tr>
+</table>
 
-## Player
+## Features
 
-Open **Audio tracks** or **Subtitles** in the player. MKV playback supports embedded audio and text subtitle tracks.
+- **Library.** Import files or whole folders, or drop them in. Exact duplicates are skipped; folders, collections, tags and favorites keep things in order.
+- **Search.** `Ctrl+K` finds anything. Filter by year, month, date range, tag or folder.
+- **Viewer.** Zoom toward the pointer, pan, flip through with the arrow keys, go fullscreen.
+- **Photo editor.** Seven looks with a strength slider, a live histogram, light, color and detail controls, crop, rotate and flip. Every step can be undone, **Original** compares on a click or while held, and **Save copy** keeps the source untouched.
+- **Player.** Embedded MKV audio and subtitle tracks, plus external MKA, FLAC, AAC, MP3, WAV and AC3 audio and SRT, ASS, SSA or VTT subtitles. FFmpeg streams what Chromium can't play.
+- **Series.** Numbered episodes form seasons, with watched marks and resume position that remembers your audio and subtitles.
+- **Private folder.** Photos and their names are encrypted with AES-256-GCM. Thumbnails and edits stay in memory.
+- **Safe deletes and backups.** Deleted photos wait in **Recently deleted**. Back up by hand or on a schedule; restores are checked against checksums.
+- **At home on Windows 11.** Acrylic, light and dark themes, reduced motion, English, Russian and Simplified Chinese.
 
-To match external tracks automatically, import the parent folder containing the video, subtitle, and audio subfolders. Folio matches tracks by title, episode number, and season. Dubs from separate subfolders appear under those folder names. For videos already in the library, choose **Import → Refresh the library**. Use the player menus to attach tracks manually when file names are ambiguous.
+## Download
 
-**Series** groups numbered episodes into seasons and remembers playback position, audio, and subtitles. Mark episodes as watched from the episode list. **Save frame** adds a PNG beside the video in the library.
+Get the latest build from [Releases](../../releases/latest):
 
-External subtitles support SRT, ASS, SSA, and VTT. External audio supports formats including MKA, FLAC, AAC, MP3, WAV, and AC3. When conversion is needed, Folio uses FFmpeg to stream video at up to 1080p with stereo audio.
+- `Folio-x.y.z-Setup.exe`: per-user installer that also updates an existing installation
+- `Folio-x.y.z-portable.zip`: unzip anywhere and run `Folio.exe`
 
-Press `Space` to play or pause, the arrow keys to seek by five seconds, `F` for fullscreen, and `M` to mute.
+Requirements: Windows 10 or 11, 64-bit. FFmpeg is included.
 
-## Development
+The builds aren't code-signed yet, so SmartScreen may warn on first launch. Choose **More info → Run anyway**.
+
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
+
+| Keys | Where | Action |
+| --- | --- | --- |
+| `Ctrl+K` | Library | Search |
+| `Ctrl+O` | Library | Import files |
+| `Ctrl+A` | Selection | Select everything in view |
+| `Ctrl+Z` | Library | Undo the last batch move |
+| `←` `→` | Viewer | Previous or next photo |
+| `Delete` | Viewer, selection | Move to Recently deleted |
+| `Space` / `←` `→` | Player | Play or pause / seek 5 seconds |
+| `F` / `M` | Player | Fullscreen / mute |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Editor | Undo or redo a step |
+| `\` (hold) | Editor | Show the original |
+| `Shift` + arrows, double-click | Editor slider | Move by ten, reset to zero |
+| `Esc` | Anywhere | Close the viewer, editor or selection |
+
+</details>
+
+## Your data
+
+| What | Where |
+| --- | --- |
+| Library index and originals | `%APPDATA%\Folio\Library` (movable in **Library settings**) |
+| Thumbnails and playback cache | `%APPDATA%\Folio\media-cache` |
+| Private folder | the `Folio Private` directory you choose |
+
+Folio works fully offline. Profiles from earlier builds in `%APPDATA%\Luma` move to `%APPDATA%\Folio` on first launch.
+
+<details>
+<summary><b>How the private folder works</b></summary>
+
+- The key comes from your passphrase (12+ characters) via scrypt; each photo and the catalog of names are sealed with AES-256-GCM.
+- The folder locks when you leave it, minimize or close Folio, lock Windows, or after five idle minutes.
+- Private photos never enter the regular library, its cache or backups. To move the vault, close Folio and copy the whole `Folio Private` directory.
+- There is no passphrase recovery. The vault protects data at rest, not a computer someone controls while it's unlocked.
+
+</details>
+
+## Build from source
+
+You need Windows 10 or 11, Node.js 22 or newer, and FFmpeg with FFprobe on `PATH` (or in `FOLIO_FFMPEG_DIR`).
 
 ```powershell
-npm.cmd ci
-npm.cmd start
-npm.cmd test
-npm.cmd run test:ui
-npm.cmd run package:win
-npm.cmd run package:win -- --installer
+npm ci
+npm start
 ```
 
-Use `npm.cmd run dev` for the browser preview. Desktop development requires FFmpeg and FFprobe on `PATH` or in the directory set by `LUMA_FFMPEG_DIR`. Both are bundled with the portable build.
+| Command | What it does |
+| --- | --- |
+| `npm start` | build the renderer and launch the app |
+| `npm run dev` | browser preview with sample media |
+| `npm test` | unit tests |
+| `npm run test:ui` | end-to-end suites against Electron |
+| `npm run package:win` | portable build in `release/` with bundled FFmpeg |
+| `npm run package:win -- --installer` | portable build plus the Inno Setup installer |
 
-Building the installer requires Inno Setup. Set `FOLIO_ISCC_PATH` to the path to `ISCC.exe` if it is installed in a custom location. The installer defaults to `%LOCALAPPDATA%\Programs\Folio`. The library profile is stored separately. For signed builds, set `FOLIO_SIGN_CERT_THUMBPRINT` and pass `--require-signing` alongside `--installer`.
+`Folio.exe --intro` replays the first-launch tour. `FOLIO_TEST_PROFILE` points the app at a separate profile; the end-to-end suites use it. The installer needs Inno Setup 6.6+ (`FOLIO_ISCC_PATH` for a custom location).
 
-The private test builds use FFmpeg 9.0.2 Essentials from Gyan. The build version and configuration are in `resources/ffmpeg/FFmpeg.txt` alongside the GPLv3 license. The [FFmpeg source archive](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz) contains upstream version 9.0.2. Prepare the complete corresponding source for the bundled build and its libraries before distributing the installer publicly.
+<details>
+<summary><b>How it works</b></summary>
 
-The demo images in `public/demo` and the coastal backdrop in `public/coast.jpg` were generated with ImageGen. The demo videos and GIFs were assembled from these images.
+```
+desktop/           Electron main process
+  main.mjs           windows, IPC, the folio:// protocol
+  library.mjs        library index, import, collections, trash, backups
+  playback.mjs       FFmpeg probing, streaming and external tracks
+  editing.mjs        photo and video export, wallpaper
+  private-vault.mjs  the encrypted private folder
+src/               React renderer: gallery, viewer, editor, player, series, onboarding
+shared/            formats, series parsing, edits, looks, search, translations
+tests/             unit tests and end-to-end suites
+```
+
+- The renderer is sandboxed and reaches the disk only through the `window.folio` bridge, which accepts calls from the app's own frame.
+- Media streams over a privileged `folio://app` protocol with byte ranges, so large videos never load into memory.
+- Library writes are queued and land atomically through a temporary file.
+
+</details>
+
+## License
+
+[MIT](LICENSE). Windows builds bundle FFmpeg, which is licensed under the GPL; see the [release guide](docs/release.md) for its source and notices.

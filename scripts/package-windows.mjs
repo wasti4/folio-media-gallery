@@ -47,7 +47,7 @@ async function executablePath(tool) {
   const resolved = resolveTool(tool)
   if (path.isAbsolute(resolved)) return resolved
   const { stdout } = await execute('where.exe', [resolved + '.exe'], { windowsHide: true }).catch(() => {
-    throw new Error('Установите FFmpeg и FFprobe или задайте LUMA_FFMPEG_DIR для сборки.')
+    throw new Error('Установите FFmpeg и FFprobe или задайте FOLIO_FFMPEG_DIR для сборки.')
   })
   return stdout.trim().split(/\r?\n/)[0]
 }

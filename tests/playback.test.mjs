@@ -54,7 +54,7 @@ test('external playback IDs follow saved tracks when the library storage moves',
 })
 
 test('local media handles open, suffix and unsatisfiable byte ranges', async t => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'luma-ranges-'))
+  const dir = await mkdtemp(path.join(tmpdir(), 'folio-ranges-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
   const file = path.join(dir, 'test.mp4')
   await writeFile(file, 'abcdefghij')

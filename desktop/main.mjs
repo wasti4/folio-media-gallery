@@ -1,9 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, screen, session, shell } from 'electron'
 import { mkdir, realpath, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { audioExtensions, mediaExtensions, subtitleExtensions } from '../shared/formats.mjs'
+import { audioExtensions, contentType, mediaExtensions, subtitleExtensions } from '../shared/formats.mjs'
 import { introResizeDuration, normalizeTheme, productName, windowSurface } from '../shared/brand.mjs'
 import { normalizeLanguage, translate } from '../shared/locale.mjs'
 import { Library } from './library.mjs'
@@ -12,8 +12,10 @@ import { MediaEditor } from './editing.mjs'
 import { localFileResponse } from './protocol.mjs'
 import { backupSettings, createBackupSchedule } from './backup-schedule.mjs'
 import { isWithin } from './media-storage.mjs'
+import { PrivateVault, VaultError, privatePhotoExtensions } from './private-vault.mjs'
+import { profileDirectory } from './profile.mjs'
 
-const origin = 'luma://app'
+const origin = 'folio://app'
 const project = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const renderer = path.join(project, 'dist')
 const introSize = { width: 760, height: 530 }
@@ -25,6 +27,7 @@ let window
 let library
 let playback
 let editor
+let vault
 let storageJob
 let lastBackup
 let automaticBackup
@@ -33,20 +36,23 @@ let pendingPlaybackFlush
 let playbackFlushToken = 0
 let finalizing = false
 let introPending
+let galleryLanding
+let motionFinished
 let showingIntro = false
 const t = message => translate(library?.language, message)
 
 app.setName(productName)
-// Keep the existing library and Chromium preferences at the profile path used by Luma.
-app.setPath('userData', process.env.LUMA_TEST_PROFILE ?? path.join(app.getPath('appData'), 'Luma'))
+app.setPath('userData', profileDirectory(app.getPath('appData'), productName, process.env.FOLIO_TEST_PROFILE))
 if (process.platform === 'win32') app.setAppUserModelId('local.folio.media')
 protocol.registerSchemesAsPrivileged([{
-  scheme: 'luma', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  scheme: 'folio', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
 }])
 
 function register(name, handler) {
-  ipcMain.handle('luma:' + name, (event, ...args) => {
-    if (!window || event.sender !== window.webContents ||
+  ipcMain.handle('folio:' + name, (event, ...args) => {
+    const fromWindow = event.sender === window?.webContents
+    const landingState = name === 'state' && event.sender === galleryLanding?.current.webContents
+    if ((!fromWindow && !landingState) ||
       !event.senderFrame?.url.startsWith(origin + '/') || event.senderFrame.parent) {
       throw new Error('Действие недоступно.')
     }
@@ -74,7 +80,7 @@ async function storageOperation(action) {
     const now = Date.now()
     if (done === 0 || done === total || now - last >= 100) {
       last = now
-      window?.webContents.send('luma:storage-progress', { done, total })
+      window?.webContents.send('folio:storage-progress', { done, total })
     }
   }
   const operation = Promise.resolve().then(() => action(progress))
@@ -97,7 +103,7 @@ async function chooseFolder(title) {
 }
 
 function publishBackupStatus() {
-  if (window && !window.isDestroyed()) window.webContents.send('luma:backup-status', automaticBackup.status())
+  if (window && !window.isDestroyed()) window.webContents.send('folio:backup-status', automaticBackup.status())
 }
 
 function requestPlaybackFlush() {
@@ -110,8 +116,59 @@ function requestPlaybackFlush() {
     clearTimeout(timer)
     pendingPlaybackFlush = null
   }), resolve }
-  window.webContents.send('luma:prepare-playback-flush', token)
+  window.webContents.send('folio:prepare-playback-flush', token)
   return pendingPlaybackFlush.promise
+}
+
+function lockVault() {
+  vault?.lock()
+}
+
+function registerVaultActions() {
+  const action = (name, handler) => register('vault-' + name, async (...args) => {
+    if (finalizing) return { error: 'LOCKED' }
+    try {
+      return { value: await handler(...args) }
+    } catch (error) {
+      return { error: error instanceof VaultError ? error.code : 'FAILED' }
+    }
+  })
+  const pick = async (title, options) => {
+    const generation = vault.generation
+    const result = await dialog.showOpenDialog(window, { title: t(title), ...options })
+    if (generation !== vault.generation) throw new VaultError('LOCKED')
+    return result.canceled ? null : result.filePaths
+  }
+  const directory = ['openDirectory', 'dontAddToRecent']
+  action('state', () => vault.status())
+  action('create', async password => {
+    const selected = await pick('Выберите место для приватной папки', { properties: directory })
+    return selected?.length ? vault.create(selected[0], password) : null
+  })
+  action('connect', async password => {
+    const selected = await pick('Выберите существующую приватную папку', { properties: directory })
+    return selected?.length ? vault.connect(selected[0], password) : null
+  })
+  action('unlock', password => vault.unlock(password))
+  action('lock', () => { lockVault(); return vault.status() })
+  action('import', async () => {
+    if (!vault.status().unlocked) throw new VaultError('LOCKED')
+    const selected = await pick('Выберите фото для приватной папки', {
+      properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
+      filters: [{ name: t('Фотографии'), extensions: privatePhotoExtensions }],
+    })
+    return selected?.length ? vault.addFiles(selected) : null
+  })
+  action('image', id => vault.readImage(id))
+  action('thumbnail', id => vault.readThumbnail(id, (bytes, item) => {
+    const image = nativeImage.createFromBuffer(bytes)
+    if (image.isEmpty()) return { source: 'data:' + contentType(item.name) + ';base64,' + bytes.toString('base64') }
+    const { width, height } = image.getSize()
+    const scale = Math.min(1, 320 / Math.max(width, height))
+    return image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) }).toDataURL()
+  }))
+  action('save-copy', (id, image, generation) => vault.saveCopy(id, image, generation))
+  action('remove', id => vault.remove(id))
 }
 
 function registerActions() {
@@ -123,9 +180,15 @@ function registerActions() {
   })
   register('language', value => library.setPreferences({ language: normalizeLanguage(value) }))
   register('finish-intro', animate => {
-    if (showingIntro && !introPending) introPending = enterGallery(window, animate === true)
+    if (showingIntro && !introPending) {
+      introPending = useAcrylic ? landIntroMotion(window, animate === true) : enterGallery(window, animate === true)
+    }
     return introPending
   })
+  register('warm-intro-gallery', () => {
+    if (showingIntro && useAcrylic && !introPending) prepareIntroLanding(window)
+  })
+  register('intro-motion-finished', () => { motionFinished?.() })
   register('import', async kind => {
     const folder = kind === 'folder'
     const result = await dialog.showOpenDialog(window, {
@@ -197,6 +260,7 @@ function registerActions() {
     await library.removeCollection(id)
     return library.snapshot()
   })
+  register('remove-folder', id => changeLibrary(() => library.removeFolder(id)))
   register('remove-photo', id => changeLibrary(async () => {
     const result = await library.softDeletePhotos([id])
     return { ...result, removed: result.removedIds.length > 0 }
@@ -246,7 +310,7 @@ function registerActions() {
   register('cancel-edit-save', () => editor.cancelSave())
   register('save-edit', async (id, settings) => {
     const edited = await storageOperation(() => editor.save(id, settings, progress => {
-      if (window && !window.isDestroyed()) window.webContents.send('luma:edit-progress', progress)
+      if (window && !window.isDestroyed()) window.webContents.send('folio:edit-progress', progress)
     }))
     return edited ? { id: edited, state: library.snapshot() } : null
   })
@@ -276,7 +340,7 @@ function registerActions() {
 }
 
 function serveApp() {
-  protocol.handle('luma', async request => {
+  protocol.handle('folio', async request => {
     try {
       if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
       const url = new URL(request.url)
@@ -354,33 +418,135 @@ async function enterGallery(current, animate) {
   if (error) throw error
 }
 
-function createWindow() {
-  const { workArea } = screen.getPrimaryDisplay()
+async function galleryPaintReady() {
+  const tick = () => new Promise(resolve => setTimeout(resolve, 16))
+  const deadline = performance.now() + 540
+  while (!document.querySelector('[data-intro-gallery]') && performance.now() < deadline) await tick()
+  const images = [...document.querySelectorAll('.app-shell img')].filter(image => {
+    const box = image.getBoundingClientRect()
+    return box.height > 0 && box.bottom > 0 && box.top < innerHeight && box.left < innerWidth
+  }).slice(0, 16)
+  for (const image of images) image.loading = 'eager'
+  await Promise.race([
+    Promise.allSettled([document.fonts.ready, ...images.map(image => image.decode())]),
+    new Promise(resolve => setTimeout(resolve, 210)),
+  ])
+}
+
+function prepareIntroLanding(current) {
+  const bounds = current.getBounds()
+  const { theme, language } = library
+  if (galleryLanding && !galleryLanding.current.isDestroyed() && galleryLanding.theme === theme &&
+    galleryLanding.language === language && Object.keys(bounds).every(key => bounds[key] === galleryLanding.bounds[key])) {
+    return galleryLanding
+  }
+  if (galleryLanding && !galleryLanding.current.isDestroyed()) galleryLanding.current.destroy()
+  const { workArea } = screen.getDisplayMatching(bounds)
+  const landing = createWindow({ workArea, bounds, landing: true })
+  const painted = Promise.all([landing.loaded, landing.ready]).then(() =>
+    landing.current.webContents.executeJavaScript('(' + galleryPaintReady.toString() + ')()'))
+  painted.catch(() => {})
+  galleryLanding = { ...landing, bounds, theme, language, painted }
+  return galleryLanding
+}
+
+async function landIntroMotion(current, animate) {
+  const saved = library.setPreferences({ onboarded: true }).then(() => null, error => error)
+  const motion = Promise.withResolvers()
+  motionFinished = motion.resolve
+  if (animate) current.setShape([])
+  let landing
+  try {
+    if (animate) await Promise.race([motion.promise, delay(1250)])
+    if (current.isDestroyed()) return
+    landing = prepareIntroLanding(current)
+    const deadline = new AbortController()
+    try {
+      await Promise.race([landing.painted, delay(2200, undefined, { signal: deadline.signal }).then(() => {
+        throw new Error(t('Не удалось запустить Folio'))
+      })])
+    } finally {
+      deadline.abort()
+    }
+    if (current.isDestroyed()) return
+
+    const next = landing.current
+    const focused = current.isFocused()
+    if (animate) {
+      // Keep the finished transition over the gallery while Windows presents its first real frame.
+      current.setAlwaysOnTop(true)
+      next.showInactive()
+      current.moveTop()
+      await delay(45)
+      if (current.isDestroyed()) return
+      if (next.isDestroyed()) throw new Error(t('Не удалось запустить Folio'))
+    }
+    next.setBackgroundMaterial('acrylic')
+    next.setBackgroundColor(transparentBackground)
+    if (animate) await delay(85)
+    if (current.isDestroyed()) return
+    if (next.isDestroyed()) throw new Error(t('Не удалось запустить Folio'))
+    window = next
+    galleryLanding = null
+    showingIntro = false
+    if (!animate) next.showInactive()
+    current.destroy()
+    if (focused) next.focus()
+    next.webContents.setBackgroundThrottling(true)
+    next.webContents.send('folio:reveal-intro-gallery', animate)
+    const error = await saved
+    if (error) console.error(error.message)
+  } catch (error) {
+    if (!current.isDestroyed()) {
+      current.setAlwaysOnTop(false)
+      current.setShape([])
+      await enterGallery(current, false)
+    }
+    throw error
+  } finally {
+    motionFinished = null
+    if (landing && galleryLanding === landing) {
+      galleryLanding = null
+      if (!landing.current.isDestroyed()) landing.current.destroy()
+    }
+  }
+}
+
+function createWindow({ workArea = screen.getPrimaryDisplay().workArea, bounds, landing = false } = {}) {
   const candidates = [path.join(project, 'build', 'icon.ico'), path.join(process.resourcesPath, 'icon.ico')]
-  showingIntro = !library.preferences.onboarded || app.commandLine.hasSwitch('intro')
-  const minimum = showingIntro ? introSize : galleryMinimum
+  const intro = !landing && (!library.preferences.onboarded || app.commandLine.hasSwitch('intro'))
+  if (!landing) showingIntro = intro
+  const animatedIntro = intro && useAcrylic
+  const compact = intro && !animatedIntro
+  const minimum = intro ? introSize : galleryMinimum
   nativeTheme.themeSource = library.theme
   const target = new URL(origin + '/')
   target.searchParams.set('theme', library.theme)
   target.searchParams.set('lang', library.language)
-  if (showingIntro) target.searchParams.set('intro', '1')
+  if (intro) {
+    target.searchParams.set('intro', '1')
+    if (animatedIntro) target.searchParams.set('intro-motion', '1')
+  }
+  if (landing) target.searchParams.set('intro-landing', '1')
   if (!useAcrylic) target.searchParams.set('scene', '1')
-  window = new BrowserWindow({
-    ...centeredBounds(workArea, showingIntro ? introSize : gallerySize),
+  const current = new BrowserWindow({
+    ...(bounds ?? centeredBounds(workArea, compact ? introSize : gallerySize)),
     minWidth: Math.min(minimum.width, workArea.width), minHeight: Math.min(minimum.height, workArea.height),
-    resizable: !showingIntro, maximizable: !showingIntro,
+    resizable: !intro, maximizable: !intro,
     frame: false, show: false, title: productName, icon: app.isPackaged ? candidates[1] : candidates[0],
-    backgroundColor: showingIntro ? windowSurface[library.theme] : transparentBackground,
-    ...(useAcrylic && { backgroundMaterial: showingIntro ? 'none' : 'acrylic' }),
+    backgroundColor: compact || landing ? windowSurface[library.theme] : transparentBackground,
+    ...(animatedIntro && { transparent: true, hasShadow: false, thickFrame: false }),
+    ...(useAcrylic && { backgroundMaterial: intro || landing ? 'none' : 'acrylic' }),
     webPreferences: {
       preload: path.join(project, 'desktop', 'preload.cjs'),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
+      ...(landing && { backgroundThrottling: false }),
     },
   })
-  const current = window
+  if (!landing) window = current
   let allowClose = false
-  window.on('close', event => {
-    if (allowClose || finalizing) return
+  current.on('close', event => {
+    if (allowClose || finalizing || current !== window) return
     event.preventDefault()
     requestPlaybackFlush().then(() => library.flushPlayback()).catch(error => console.error(error.message)).finally(() => {
       if (current.isDestroyed()) return
@@ -388,24 +554,38 @@ function createWindow() {
       current.close()
     })
   })
-  window.setMenu(null)
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  window.webContents.on('will-navigate', (event, url) => {
+  current.setMenu(null)
+  current.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  current.webContents.on('will-navigate', (event, url) => {
     if (url !== target.href) event.preventDefault()
   })
-  window.webContents.on('did-fail-load', (_, code, reason, url, isMainFrame) => {
-    if (isMainFrame) dialog.showErrorBox(t('Не удалось запустить Folio'), reason + ' (' + code + ')')
+  current.webContents.on('did-fail-load', (_, code, reason, url, isMainFrame) => {
+    if (!landing && isMainFrame) dialog.showErrorBox(t('Не удалось запустить Folio'), reason + ' (' + code + ')')
   })
-  const emitState = () => window.webContents.send('luma:window-state', window.isMaximized())
-  window.on('maximize', emitState)
-  window.on('unmaximize', emitState)
-  window.on('closed', () => {
+  const emitState = () => current.webContents.send('folio:window-state', current.isMaximized())
+  current.on('maximize', emitState)
+  current.on('unmaximize', emitState)
+  current.on('minimize', () => { if (current === window) lockVault() })
+  current.webContents.on('render-process-gone', () => { if (current === window) lockVault() })
+  current.on('closed', () => {
+    if (current !== window) return
+    if (galleryLanding && !galleryLanding.current.isDestroyed()) galleryLanding.current.destroy()
+    galleryLanding = null
     window = null
+    lockVault()
     playback.close()
     editor.close()
   })
-  window.once('ready-to-show', () => window?.show())
-  return window.loadURL(target.href)
+  const ready = new Promise(resolve => current.once('ready-to-show', () => {
+    if (animatedIntro) {
+      const { width, height } = current.getContentBounds()
+      const visible = centeredBounds({ x: 0, y: 0, width, height }, introSize)
+      current.setShape([visible])
+    }
+    if (!landing) current.show()
+    resolve()
+  }))
+  return { current, ready, loaded: current.loadURL(target.href) }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -425,6 +605,13 @@ if (!app.requestSingleInstanceLock()) {
     )
     playback = new Playback(library, cache, process.resourcesPath)
     editor = new MediaEditor(library, playback, data)
+    vault = await PrivateVault.open(path.join(data, 'private-vault.json'), () => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+        window.webContents.send('folio:vault-locked', vault.status())
+      }
+    })
+    powerMonitor.on('lock-screen', lockVault)
+    powerMonitor.on('suspend', lockVault)
     automaticBackup = createBackupSchedule({
       read: () => library.preferences.automaticBackup,
       save: settings => library.setPreferences({ automaticBackup: settings }),
@@ -440,7 +627,8 @@ if (!app.requestSingleInstanceLock()) {
     })
     serveApp()
     registerActions()
-    await createWindow()
+    registerVaultActions()
+    await createWindow().loaded
     const checkBackup = () => {
       const checking = automaticBackup.tick()
       if (automaticBackup.status().running) {
@@ -458,9 +646,10 @@ if (!app.requestSingleInstanceLock()) {
     if (!library || finalizing) return
     event.preventDefault()
     finalizing = true
+    lockVault()
     clearInterval(automaticBackupTimer)
     const completed = storageJob?.catch(error => console.error(error.message))
-    Promise.all([requestPlaybackFlush(), completed]).then(() => Promise.all([library.flushRecent(), library.flushPlayback(), library.preferencesPending]))
+    Promise.all([requestPlaybackFlush(), completed, vault?.settle()]).then(() => Promise.all([library.flushRecent(), library.flushPlayback(), library.preferencesPending]))
       .catch(error => console.error(error.message)).finally(() => app.quit())
   })
   app.on('window-all-closed', () => app.quit())

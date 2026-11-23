@@ -20,7 +20,7 @@ const audio = path.join(seasonTwo, 'Audio', 'Studio B', '02.flac')
 const subtitle = path.join(seasonTwo, 'Subtitles', '02.en.srt')
 const executable = process.env.FOLIO_TEST_EXE
 const ffmpeg = executable ? path.join(path.dirname(path.resolve(executable)), 'resources', 'ffmpeg', 'ffmpeg.exe') :
-  process.env.LUMA_FFMPEG_DIR ? path.join(process.env.LUMA_FFMPEG_DIR, 'ffmpeg.exe') : 'ffmpeg'
+  process.env.FOLIO_FFMPEG_DIR ? path.join(process.env.FOLIO_FFMPEG_DIR, 'ffmpeg.exe') : 'ffmpeg'
 const execute = promisify(execFile)
 const errors = []
 let app
@@ -29,7 +29,7 @@ async function launch() {
   app = await electron.launch({
     args: executable ? [] : ['.'],
     ...(executable && { executablePath: path.resolve(executable) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
     timeout: 25000,
   })
   const page = await app.firstWindow()
@@ -83,8 +83,8 @@ try {
   await button(page, 'Сезон 2').click()
   await playEpisode(page)
   await page.waitForFunction(() => document.querySelector('.video-stage video')?.currentTime > .1)
-  const id = await page.evaluate(async filename => (await window.luma.state()).items.find(item => item.filename === filename).id, filename)
-  const info = await page.evaluate(id => window.luma.inspect(id), id)
+  const id = await page.evaluate(async filename => (await window.folio.state()).items.find(item => item.filename === filename).id, filename)
+  const info = await page.evaluate(id => window.folio.inspect(id), id)
   assert.deepEqual(info.audio.map(track => track.label), ['Studio A · 02.flac', 'Studio B · 02.flac'])
   await button(page, 'Аудиодорожки').click()
   await page.getByRole('menuitemcheckbox', { name: 'Studio B · 02.flac', exact: true }).click()
@@ -107,7 +107,7 @@ try {
   await button(page, 'Сохранить кадр').click()
   await page.getByText('Кадр сохранён в медиатеке', { exact: true }).waitFor()
   const image = await page.evaluate(async () => {
-    const photo = (await window.luma.state()).items.find(item => item.kind === 'photo')
+    const photo = (await window.folio.state()).items.find(item => item.kind === 'photo')
     const img = new Image()
     img.src = photo.viewUrl
     await img.decode()
@@ -125,7 +125,7 @@ try {
   })
   assert.deepEqual(image, { ext: 'png', width: 256, height: 144, caption: true })
   await button(page, 'Закрыть просмотр').click()
-  const saved = await poll(() => page.evaluate(async id => (await window.luma.state()).playback?.[id], id),
+  const saved = await poll(() => page.evaluate(async id => (await window.folio.state()).playback?.[id], id),
     record => record?.position > 5)
   assert.equal(saved.audioId, info.audio[1].id)
   assert.equal(saved.subtitleId, info.subtitles[0].id)
@@ -140,7 +140,7 @@ try {
   await button(page, 'Пауза').click()
   const resumed = await poll(() => page.evaluate(async id => {
     const decoded = document.querySelector('.video-stage video')?.currentTime
-    const position = (await window.luma.state()).playback?.[id]?.position
+    const position = (await window.folio.state()).playback?.[id]?.position
     return { decoded, position }
   }, id), value => value.decoded > .1 && value.position > saved.position)
   assert.ok(Math.abs(resumed.position - resumed.decoded - saved.position) < .005, JSON.stringify({ resumed, saved }))

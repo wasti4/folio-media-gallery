@@ -14,7 +14,7 @@ async function launch(args = []) {
   app = await electron.launch({
     args: target ? args : ['.', ...args],
     ...(target && { executablePath: path.resolve(target) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
     timeout: 25000,
   })
   const page = await app.firstWindow()
@@ -69,15 +69,24 @@ try {
   await app.close()
   page = await launch(['--intro'])
   await page.getByRole('img', { name: 'Hello', exact: true }).waitFor()
-  await page.mouse.click(220, 35)
+  const expansionSupported = await app.evaluate(() =>
+    process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2]) >= 22621)
+  assert.equal(await page.locator('.window-stage').getAttribute('data-intro-motion'), expansionSupported ? '' : null)
+  await page.getByRole('button', { name: 'Нажмите, чтобы продолжить', exact: true }).click()
   await page.getByRole('heading', { name: 'Все кадры вместе', exact: true }).waitFor({ timeout: 2000 })
   const introText = await page.locator('.intro-frame').evaluate(frame => getComputedStyle(frame).color)
   assert.equal(introText, lightText, 'the replayed light intro should use the gallery text color')
   const arrowInset = await page.locator('.intro-language-chevron').evaluate(arrow =>
     arrow.parentElement.getBoundingClientRect().right - arrow.getBoundingClientRect().right)
   assert.ok(arrowInset >= 9 && arrowInset <= 15, 'the arrow should be inset from the selector edge')
-  await page.getByRole('button', { name: 'Пропустить', exact: true }).click()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const landing = expansionSupported ? app.waitForEvent('window') : Promise.resolve(page)
+  const greeting = page
+  await greeting.getByRole('button', { name: 'Пропустить', exact: true }).click()
+  page = await landing
+  await page.waitForFunction(() => document.querySelector('.window-stage:not([data-onboarding])'))
   await verifyTheme(page, 'light')
+  if (expansionSupported) assert.equal(greeting.isClosed(), true)
   assert.deepEqual(errors, [])
   console.log('Folio branding, mouse, keyboard, drag and theme persistence passed.')
 } finally {

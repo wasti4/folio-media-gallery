@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ArrowDownWideNarrow, Check, ChevronDown, Clock3, Clapperboard, Copy, Ellipsis, Film,
-  Folder, Globe2, HardDrive, Heart, Image, Images, LayoutGrid, List, Minus, Play, Plus, Search, Settings2, Square, SquareCheckBig, Trash2, Tv, Undo2, X,
+  Folder, Globe2, HardDrive, Heart, Image, Images, LayoutGrid, List, LockKeyhole, Minus, Play, Plus, Search, Settings2, Square, SquareCheckBig, Trash2, Tv, Undo2, X,
 } from 'lucide-react'
 import { IconButton, Picture, clock, formatDate } from './ui.jsx'
 import { isDesktop, mediaApi } from './media-api.mjs'
@@ -13,7 +13,11 @@ const destinations = [
   { id: 'all', label: 'Все файлы', Icon: LayoutGrid },
   { id: 'favorites', label: 'Избранное', Icon: Heart },
   { id: 'recent', label: 'Недавние', Icon: Clock3 },
-  ...(isDesktop ? [{ id: 'series', label: 'Сериалы', Icon: Tv }, { id: 'deleted', label: 'Недавно удалённые', shortLabel: 'Удалённые', Icon: Trash2 }] : []),
+  ...(isDesktop ? [
+    { id: 'series', label: 'Сериалы', Icon: Tv },
+    { id: 'vault', label: 'Приватная папка', shortLabel: 'Приватное', Icon: LockKeyhole },
+    { id: 'deleted', label: 'Недавно удалённые', shortLabel: 'Удалённые', Icon: Trash2 },
+  ] : []),
 ]
 
 export function BrandMark() {
@@ -58,7 +62,7 @@ export function Sidebar({ state, active, navigate, createFolder, expanded, setEx
       <nav className="side-group" aria-label={t('Медиатека')}>
         <div className="side-heading rail-label section-heading">{t('Медиатека')}</div>
         {destinations.map(({ id, label, shortLabel = label, Icon }) => <button type="button" key={id} className={'side-row' + (active === id ? ' selected' : '')}
-          data-rail-current={active === id ? '' : undefined}
+          data-rail-current={active === id ? '' : undefined} data-destination={id}
           title={t(label)} aria-label={t(label)} aria-current={active === id ? 'page' : undefined} onClick={() => navigate(id)}>
           <Icon className="side-icon" size={18} strokeWidth={1.7} />
           <span className="side-name rail-label">{t(shortLabel)}</span>
@@ -94,26 +98,26 @@ export function Sidebar({ state, active, navigate, createFolder, expanded, setEx
   </aside>
 }
 
-export function Titlebar({ search, setSearch, searchRef, openImport, importing, changeTheme, openLanguage, openSettings, undo }) {
+export function Titlebar({ search, setSearch, searchRef, openImport, importing, changeTheme, openLanguage, openSettings, undo, privateScope }) {
   const { t } = useLocale()
   const [maximized, setMaximized] = useState(false)
   const maximize = async () => setMaximized(await mediaApi.window('maximize'))
   useEffect(() => mediaApi.observeWindow?.(setMaximized), [])
   return <header className="titlebar" onDoubleClick={event => { if (isDesktop && event.target === event.currentTarget) maximize() }}>
-    <label className="search-field">
+    {!privateScope && <label className="search-field">
       <Search size={17} strokeWidth={1.8} />
       <input ref={searchRef} type="search" aria-label={t('Поиск в медиатеке')} placeholder={t('Поиск в медиатеке')} value={search} onChange={event => setSearch(event.target.value)} />
       {search ? <IconButton icon={X} size={15} label={t('Очистить поиск')} onClick={() => { setSearch(''); searchRef.current.focus() }} /> : <kbd>Ctrl K</kbd>}
-    </label>
+    </label>}
     <div className="title-actions">
       <ThemeSwitch change={changeTheme} />
       <IconButton icon={Globe2} label={t('Язык интерфейса')} data-popup-trigger aria-haspopup="menu" onClick={openLanguage} />
       {undo && <IconButton icon={Undo2} label={t('Отменить перемещение')} onClick={undo} />}
       {openSettings && <IconButton icon={Settings2} label={t('Настройки медиатеки')} onClick={openSettings} />}
-      <button className="primary-button import-button" type="button" onClick={openImport} data-popup-trigger aria-label={t('Импорт')} aria-haspopup="menu" disabled={importing}>
+      {!privateScope && <button className="primary-button import-button" type="button" onClick={openImport} data-popup-trigger aria-label={t('Импорт')} aria-haspopup="menu" disabled={importing}>
         <Plus size={17} strokeWidth={1.8} />
         <span>{t(importing ? 'Импорт…' : 'Импорт')}</span>
-      </button>
+      </button>}
       {isDesktop && <div className="window-controls" aria-label={t('Управление окном')}>
         <IconButton icon={Minus} size={15} label={t('Свернуть окно')} onClick={() => mediaApi.window('minimize')} />
         <IconButton icon={maximized ? Copy : Square} size={13} label={t(maximized ? 'Восстановить окно' : 'Развернуть окно')} onClick={maximize} />
@@ -212,7 +216,7 @@ export function GalleryToolbar({ filter, setFilter, sort, openSort, view, setVie
   </div>
 }
 
-function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, onPick, index }) {
+function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, onPick, index, renderPicture }) {
   const { t, language } = useLocale()
   const canPick = selecting && item.kind === 'photo' && !item.demo
   return <article className={'media-card media-' + item.kind} data-media-id={item.id} data-picked={picked || undefined}
@@ -221,7 +225,7 @@ function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, o
       role={canPick ? 'checkbox' : undefined} aria-checked={canPick ? picked : undefined}
       aria-label={t(canPick ? 'Выбрать «{name}»' : 'Открыть «{name}»', { name: item.name })}>
       <div className="media-thumb">
-        <Picture item={item} eager={eager} />
+        {renderPicture ? renderPicture(item) : <Picture item={item} eager={eager} />}
         {canPick && <span className="card-selection" aria-hidden="true" style={{ '--pick-delay': Math.min(index, 12) * 10 + 'ms' }}>
           <Check size={15} strokeWidth={2.6} />
         </span>}
@@ -231,13 +235,13 @@ function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, o
       </div>
       <span className="card-caption">
         <strong title={item.filename}>{item.name}</strong>
-        <span>{item.folderName}<span className="inline-dot" />{formatDate(item.modifiedAt, language)}</span>
+        <span><span className="caption-folder" title={item.folderName}>{item.folderName}</span>{item.modifiedAt != null && <><span className="inline-dot" /><span className="caption-date">{formatDate(item.modifiedAt, language)}</span></>}</span>
       </span>
     </button>
     {!selecting && <>
-      <IconButton icon={Heart} className={'card-favorite glass-button' + (item.favorite ? ' is-favorite' : '')}
-        size={16} label={t(item.favorite ? 'Убрать из избранного' : 'В избранное')} aria-pressed={item.favorite} onClick={favorite} />
-      <IconButton icon={Ellipsis} className="card-more" label={t('Действия для «{name}»', { name: item.name })} aria-haspopup="menu" data-popup-trigger onClick={onMenu} />
+      {favorite && <IconButton icon={Heart} className={'card-favorite glass-button' + (item.favorite ? ' is-favorite' : '')}
+        size={16} label={t(item.favorite ? 'Убрать из избранного' : 'В избранное')} aria-pressed={item.favorite} onClick={favorite} />}
+      {onMenu && <IconButton icon={Ellipsis} className="card-more" label={t('Действия для «{name}»', { name: item.name })} aria-haspopup="menu" data-popup-trigger onClick={onMenu} />}
     </>}
   </article>
 }
@@ -246,7 +250,7 @@ const initialRange = { start: 0, end: 24, before: 0, after: 0 }
 const overscanRows = 3
 const maxGalleryHeight = 8_000_000
 
-export function GalleryGrid({ items, view, onOpen, onMenu, favorite, selecting, picked, choose }) {
+export function GalleryGrid({ items, view, onOpen, onMenu, favorite, selecting, picked, choose, renderPicture }) {
   const grid = useRef(null)
   const [range, setRange] = useState(initialRange)
   const count = items.length
@@ -315,8 +319,8 @@ export function GalleryGrid({ items, view, onOpen, onMenu, favorite, selecting, 
   return <div className={'media-grid media-view-' + view} ref={grid}
     style={windowed ? { paddingBlockStart: before, paddingBlockEnd: after } : undefined}>
     {visible.map((item, index) => <MediaCard key={item.id} item={item} eager={index < 6} index={index}
-      selecting={selecting} picked={picked.has(item.id)} onPick={event => choose(item.id, event.shiftKey)}
-      onOpen={() => onOpen(item)} favorite={() => favorite(item.id)} onMenu={event => onMenu(event, item)} />)}
+      selecting={selecting} picked={picked?.has(item.id)} onPick={event => choose(item.id, event.shiftKey)} renderPicture={renderPicture}
+      onOpen={() => onOpen(item)} favorite={favorite && (() => favorite(item.id))} onMenu={onMenu && (event => onMenu(event, item))} />)}
   </div>
 }
 

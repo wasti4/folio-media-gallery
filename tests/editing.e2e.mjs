@@ -21,7 +21,7 @@ try {
   const forceSoftware = process.env.FOLIO_SOFTWARE_PREVIEW === '1'
   app = await electron.launch({
     args: target ? [] : ['.'], ...(target && { executablePath: path.resolve(target) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
   })
   const page = await app.firstWindow()
   page.setDefaultTimeout(10000)
@@ -36,9 +36,9 @@ try {
   await app.evaluate(({ dialog, ipcMain }, paths) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths })
     // Exercise renderer wiring without replacing the wallpaper on the computer running the tests.
-    ipcMain.removeHandler('luma:wallpaper')
+    ipcMain.removeHandler('folio:wallpaper')
     globalThis.wallpaperCalls = []
-    ipcMain.handle('luma:wallpaper', (_, id) => { globalThis.wallpaperCalls.push(id) })
+    ipcMain.handle('folio:wallpaper', (_, id) => { globalThis.wallpaperCalls.push(id) })
   }, files)
 
   const waitForRenderedFrame = () => page.waitForFunction(() => {
@@ -63,13 +63,19 @@ try {
   await button('Edit').click()
   await waitForRenderedFrame()
   const mat = await page.locator('.editor-picture').boundingBox()
-  const sample = () => page.screenshot({ clip: { x: Math.round(mat.x + mat.width / 2 - 28),
-    y: Math.round(mat.y + mat.height / 2 - 28), width: 56, height: 56 } })
+  const editorWindow = await app.browserWindow(page)
+  const sampleArea = { x: Math.round(mat.x + mat.width / 2 - 28),
+    y: Math.round(mat.y + mat.height / 2 - 28), width: 56, height: 56 }
+  // Capture through Electron so the Chromium screenshot does not interrupt the held drag.
+  const sample = () => editorWindow.evaluate(async (window, area) => {
+    const frame = await window.webContents.capturePage(area)
+    return frame.toPNG().toString('base64')
+  }, sampleArea)
   async function changedFrame(previous, message) {
     const deadline = performance.now() + 1200
     do {
       const frame = await sample()
-      if (!frame.equals(previous)) return frame
+      if (frame !== previous) return frame
     } while (performance.now() < deadline)
     assert.fail(message)
   }
@@ -93,7 +99,24 @@ try {
   const graphics = await page.locator('.editor-picture canvas').evaluate(canvas => Boolean(canvas.getContext('webgl2')))
   if (forceSoftware) assert.ok(await page.locator('.editor-picture canvas').evaluate(canvas => Boolean(canvas.getContext('2d'))))
   console.log('Photo changed during one held drag with no additional frame requests (' + (graphics ? 'WebGL' : 'Canvas 2D') + ').')
+  const pressed = name => button(name).getAttribute('aria-pressed')
+  const adjustedFrame = await sample()
+  await button('Mono').click()
+  assert.equal(await pressed('Mono'), 'true')
+  await slider('Strength').waitFor()
+  await changedFrame(adjustedFrame, 'a look must restyle the live preview')
+  await page.keyboard.press('Control+z')
+  assert.equal(await pressed('None'), 'true', 'undo removes the look')
+  assert.ok(Number(await slider('Brightness').inputValue()) > 0, 'undo keeps the earlier slider change')
+  await page.keyboard.press('Control+Shift+z')
+  assert.equal(await pressed('Mono'), 'true', 'redo restores the look')
+  // Away from the centre a plain click would set a large value, so only the reset can bring it back to zero.
+  const track = await slider('Brightness').boundingBox()
+  await slider('Brightness').dblclick({ position: { x: track.width * .85, y: track.height / 2 } })
+  assert.equal(await slider('Brightness').inputValue(), '0', 'double-click resets a slider')
+  console.log('Looks, undo and redo, and double-click reset passed.')
   await button('Reset edits').click()
+  assert.equal(await pressed('None'), 'true')
   await button('Crop').click()
   const crop = page.getByRole('group', { name: 'Move crop frame', exact: true })
   await crop.waitFor()

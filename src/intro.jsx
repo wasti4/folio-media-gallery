@@ -32,7 +32,7 @@ function Artwork({ page, t }) {
   </div>
 }
 
-export function Intro({ phase, finish }) {
+export function Intro({ phase, finish, warmGallery }) {
   const { t, language, changeLanguage } = useLocale()
   const [greeting, setGreeting] = useState(0)
   const [welcome, setWelcome] = useState('writing')
@@ -44,6 +44,9 @@ export function Intro({ phase, finish }) {
   const continueLabel = t('Нажмите, чтобы продолжить')
 
   useEffect(() => { frame.current?.focus() }, [])
+  useEffect(() => {
+    if (!waiting && interactive && page === pages.length - 1 && warmGallery) warmGallery().catch(() => {})
+  }, [waiting, interactive, page, warmGallery])
 
   function startTour() {
     frame.current?.focus({ preventScroll: true })

@@ -88,9 +88,11 @@ var
 begin
   Result := '';
   InstallPath := ExpandConstant('{app}');
-  if Overlaps(InstallPath, ExpandConstant('{userappdata}\Luma')) then
+  { The profile moves from the former Luma folder on first launch, so keep both clear of the program files. }
+  if Overlaps(InstallPath, ExpandConstant('{userappdata}\Folio')) or
+     Overlaps(InstallPath, ExpandConstant('{userappdata}\Luma')) then
     Result := CustomMessage('SeparateLibrary');
-  ProfilePath := GetEnv('LUMA_TEST_PROFILE');
+  ProfilePath := GetEnv('FOLIO_TEST_PROFILE');
   if (ProfilePath <> '') and Overlaps(InstallPath, ProfilePath) then
     Result := CustomMessage('SeparateLibrary');
 #ifdef FolioTestId

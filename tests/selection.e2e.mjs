@@ -24,7 +24,7 @@ try {
   await copyFile(original, path.join(archive, 'Extra.jpg'))
   app = await electron.launch({
     args: target ? [] : ['.'], ...(target && { executablePath: path.resolve(target) }),
-    env: { ...process.env, LUMA_TEST_PROFILE: profile },
+    env: { ...process.env, FOLIO_TEST_PROFILE: profile },
   })
   const page = await app.firstWindow()
   page.setDefaultTimeout(10000)

@@ -24,7 +24,7 @@ const original = path.join(scratch, 'Installer test.jpg')
 const executable = path.join(install, 'Folio.exe')
 const libraryFile = path.join(profile, 'Library', 'library.json')
 const appearanceFile = path.join(profile, 'Library', 'appearance.json')
-const env = { ...process.env, LUMA_TEST_PROFILE: profile, TEMP: scratch, TMP: scratch }
+const env = { ...process.env, FOLIO_TEST_PROFILE: profile, TEMP: scratch, TMP: scratch }
 const silent = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART']
 let app
 let passed = false
@@ -56,7 +56,7 @@ async function launch(version) {
   assert.equal(actual.version, version)
   assert.equal(actual.profile, profile)
   const page = await app.firstWindow()
-  await page.waitForFunction(() => Boolean(window.luma))
+  await page.waitForFunction(() => Boolean(window.folio))
   return page
 }
 
@@ -83,21 +83,22 @@ try {
   assert.deepEqual(await readdir(profile), [])
   await run(oldSetup, [...silent, '/LANG=english', '/DIR=' + install, '/LOG=' + path.join(scratch, 'install.log')])
   assert.equal(await registeredVersion(), previous)
+  await mkdir(path.dirname(appearanceFile), { recursive: true })
+  await writeFile(appearanceFile, JSON.stringify({ onboarded: true }))
   let page = await launch(previous)
   await app.evaluate(({ dialog }, source) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [source] })
   }, original)
 
   const imported = await page.evaluate(async () => {
-    await window.luma.finishIntro(false)
-    const { state, added } = await window.luma.import('files')
+    const { state, added } = await window.folio.import('files')
     const item = state.items.find(item => item.filename === 'Installer test.jpg')
     if (!item) throw new Error('The imported photo was not present in the previous version.')
-    await window.luma.favorite(item.id)
-    const collection = await window.luma.createCollection('Installer test collection')
-    await window.luma.toggleCollection(collection.id, item.id)
-    const openedAt = await window.luma.opened(item.id)
-    await window.luma.theme('dark')
+    await window.folio.favorite(item.id)
+    const collection = await window.folio.createCollection('Installer test collection')
+    await window.folio.toggleCollection(collection.id, item.id)
+    const openedAt = await window.folio.opened(item.id)
+    await window.folio.theme('dark')
     return { added, itemId: item.id, collectionId: collection.id, openedAt }
   })
   assert.equal(imported.added, 1)
@@ -123,7 +124,7 @@ try {
   }
 
   page = await launch(next)
-  const state = await page.evaluate(() => window.luma.state())
+  const state = await page.evaluate(() => window.folio.state())
   const item = state.items.find(item => item.id === imported.itemId)
   assert.equal(item?.favorite, true)
   assert.equal(item.openedAt, imported.openedAt)

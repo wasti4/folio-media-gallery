@@ -3,7 +3,7 @@ import { audioExtensions, extension, mediaExtensions, mediaKind, subtitleExtensi
 import { translate } from '../shared/locale.mjs'
 
 export const demoAsset = name => (import.meta.env?.BASE_URL ?? '/') + 'demo/' + name
-export const isDesktop = Boolean(window.luma)
+export const isDesktop = Boolean(window.folio)
 
 const browse = (extensions, directory = false, multiple = true) => new Promise(resolve => {
   const input = document.createElement('input')
@@ -23,11 +23,11 @@ const browse = (extensions, directory = false, multiple = true) => new Promise(r
 })
 
 export function setting(key, fallback) {
-  try { return JSON.parse(localStorage.getItem('luma-' + key)) ?? fallback } catch { return fallback }
+  try { return JSON.parse(localStorage.getItem('folio-' + key)) ?? fallback } catch { return fallback }
 }
 
 export function saveSetting(key, value) {
-  try { localStorage.setItem('luma-' + key, JSON.stringify(value)) } catch { /* Storage is optional in preview. */ }
+  try { localStorage.setItem('folio-' + key, JSON.stringify(value)) } catch { /* Storage is optional in preview. */ }
 }
 
 const pickerOptions = {
@@ -159,6 +159,9 @@ function browserApi() {
       }
       return state()
     },
+    removeFolder() {
+      return state()
+    },
     removeCollection(id) {
       preferences.collections = preferences.collections.filter(item => item.id !== id)
       persist()
@@ -186,4 +189,4 @@ function browserApi() {
   }
 }
 
-export const mediaApi = window.luma ?? browserApi()
+export const mediaApi = window.folio ?? browserApi()

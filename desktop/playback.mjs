@@ -95,7 +95,7 @@ async function writeSubtitle(target, contents) {
 
 export function resolveTool(name, resources = '') {
   const filename = name + (process.platform === 'win32' ? '.exe' : '')
-  const candidates = [process.env.LUMA_FFMPEG_DIR, resources && path.join(resources, 'ffmpeg')].filter(Boolean)
+  const candidates = [process.env.FOLIO_FFMPEG_DIR, resources && path.join(resources, 'ffmpeg')].filter(Boolean)
   return candidates.map(dir => path.resolve(dir, filename)).find(file => existsSync(file)) ?? name
 }
 
@@ -279,7 +279,7 @@ export class Playback {
     child.on('close', code => {
       request.signal.removeEventListener('abort', abort)
       session.children.delete(child)
-      if (code && diagnostics && process.env.LUMA_DEBUG) console.error(diagnostics)
+      if (code && diagnostics && process.env.FOLIO_DEBUG) console.error(diagnostics)
     })
     return new Response(Readable.toWeb(child.stdout), { headers })
   }
