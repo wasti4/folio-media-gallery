@@ -2,7 +2,7 @@
 
 Downloads for every version are on the [Releases page](https://github.com/wasti4/folio-media-gallery/releases).
 
-## Unreleased
+## 1.11.0 · 2026-11-24
 
 - **A calmer interface.** Lighter type weights and slightly larger small text, sentence-case labels instead of spaced capitals, steadier spacing, and no glows or springy motion. Cards no longer jump or zoom on hover.
 - **List view shows file details.** Format, pixel size or running time, and file size line up in columns.
