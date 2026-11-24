@@ -59,10 +59,14 @@ Source: "{#FolioPayload}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 #ifndef FolioTestId
 [Icons]
 Name: "{autoprograms}\Folio"; Filename: "{app}\Folio.exe"; WorkingDir: "{app}"; AppUserModelID: "local.folio.media"
+#endif
 
 [Run]
+#ifndef FolioTestId
 Filename: "{app}\Folio.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,Folio}"; Flags: nowait postinstall skipifsilent
 #endif
+; Folio's own updater runs Setup silently with /RELAUNCH=1 and expects to be started again afterwards.
+Filename: "{app}\Folio.exe"; WorkingDir: "{app}"; Flags: nowait; Check: RelaunchAfterUpdate
 
 [CustomMessages]
 english.SeparateLibrary=Choose an installation folder outside the Folio library.
@@ -72,6 +76,11 @@ chinesesimplified.SeparateLibrary=请选择 Folio 媒体库以外的安装目录
 #endif
 
 [Code]
+function RelaunchAfterUpdate: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
+
 function ContainsPath(ParentPath, ChildPath: String): Boolean;
 begin
   Result := Pos(Lowercase(AddBackslash(ParentPath)), Lowercase(AddBackslash(ChildPath))) = 1;

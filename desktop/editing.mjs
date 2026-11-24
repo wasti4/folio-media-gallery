@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { hasCrop, limit, newEdit, normalizeEdit } from '../shared/edits.mjs'
+import { fullCrop, hasCrop, hasEdit, limit, newEdit, normalizeEdit } from '../shared/edits.mjs'
 import { hasPhotoTone, luminanceWeights, photoLookup, sharpWeight } from '../shared/photo-look.mjs'
 
 const exec = promisify(execFile)
@@ -118,6 +118,7 @@ export class MediaEditor {
     this.frames = new Map()
     this.frameRequest = null
     this.saving = null
+    this.batch = null
   }
 
   async source(id) {
@@ -246,7 +247,39 @@ export class MediaEditor {
     }
   }
 
+  // Applies one set of adjustments to several photos and keeps a copy of each next to its original.
+  // Framing is a per-photo choice, so a crop is never applied to the whole batch.
+  async saveMany(ids, input, progress = () => {}) {
+    if (this.saving || this.batch) throw new Error('Копия уже сохраняется.')
+    const photos = [...new Set(Array.isArray(ids) ? ids : [])].filter(id => this.library.file(id)?.kind === 'photo')
+    if (!photos.length) throw new Error('Выберите фотографии для правки.')
+    const edit = { ...normalizeEdit(input), crop: { ...fullCrop } }
+    if (!hasEdit(edit, 0)) throw new Error('Нет правок для сохранения.')
+    const controller = new AbortController()
+    this.batch = controller
+    const saved = []
+    let failed = 0
+    try {
+      progress(0, photos.length)
+      for (const id of photos) {
+        if (controller.signal.aborted) break
+        try {
+          const copy = await this.save(id, edit)
+          if (copy) saved.push(copy)
+        } catch (error) {
+          if (/Недостаточно места/.test(error.message)) throw error
+          failed += 1
+        }
+        progress(saved.length + failed, photos.length)
+      }
+    } finally {
+      if (this.batch === controller) this.batch = null
+    }
+    return { saved, failed, canceled: controller.signal.aborted, total: photos.length }
+  }
+
   cancelSave() {
+    this.batch?.abort()
     this.saving?.abort()
   }
 

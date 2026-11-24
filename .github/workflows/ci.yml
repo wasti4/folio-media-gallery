@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Releases bundle this exact FFmpeg build; see docs/release.md.
+  FFMPEG_VERSION: 9.0.2
+  FFMPEG_SHA256: 60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba
+  INNO_VERSION: 7.1.1
+  INNO_SHA256: 8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0
+
+jobs:
+  test:
+    name: Tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: ./.github/actions/windows-tools
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Interface tests
+        run: npm run test:ui
+
+  package:
+    name: Windows installer
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: ./.github/actions/windows-tools
+        with:
+          inno-setup: 'true'
+      - run: npm ci
+      - name: Build the installer
+        run: npm run package:win -- --installer
+      - name: Install, update, relaunch and uninstall
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $parts = $version.Split('.')
+          $next = '{0}.{1}.{2}' -f $parts[0], $parts[1], ([int]$parts[2] + 1)
+          $payload = Join-Path $env:RUNNER_TEMP "Folio-$next"
+          Copy-Item "release\Folio-$version" $payload -Recurse
+          $manifest = Join-Path $payload 'resources\app\package.json'
+          (Get-Content $manifest -Raw) -replace '"version": "[^"]+"', ('"version": "{0}"' -f $next) | Set-Content $manifest -NoNewline
+          $work = New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'installer-test')
+          node tests/windows-installer.e2e.mjs "release\Folio-$version" $payload $work.FullName
+      - name: Portable archive and checksums
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          7z a -tzip -mx=7 "release\Folio-$version-portable.zip" ".\release\Folio-$version\*" | Out-Null
+          Get-FileHash "release\Folio-$version-Setup.exe", "release\Folio-$version-portable.zip" -Algorithm SHA256 |
+            ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } |
+            Set-Content release\SHA256SUMS.txt
+          Get-Content release\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Folio-windows
+          path: |
+            release/Folio-*-Setup.exe
+            release/Folio-*-portable.zip
+            release/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error

@@ -1,5 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, screen, session, shell } from 'electron'
-import { mkdir, realpath, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, net, powerMonitor, protocol, screen, session, shell } from 'electron'
+import { spawn } from 'node:child_process'
+import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +15,8 @@ import { backupSettings, createBackupSchedule } from './backup-schedule.mjs'
 import { isWithin } from './media-storage.mjs'
 import { PrivateVault, VaultError, privatePhotoExtensions } from './private-vault.mjs'
 import { profileDirectory } from './profile.mjs'
+import { Updater, installerArguments, releaseFeed, removeFinishedDownloads } from './updates.mjs'
+import { FolderWatcher } from './watch-folders.mjs'
 
 const origin = 'folio://app'
 const project = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -32,6 +35,10 @@ let storageJob
 let lastBackup
 let automaticBackup
 let automaticBackupTimer
+let updater
+let watcher
+let updateTimer
+let pendingInstaller
 let pendingPlaybackFlush
 let playbackFlushToken = 0
 let finalizing = false
@@ -104,6 +111,37 @@ async function chooseFolder(title) {
 
 function publishBackupStatus() {
   if (window && !window.isDestroyed()) window.webContents.send('folio:backup-status', automaticBackup.status())
+}
+
+function send(channel, value) {
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, value)
+}
+
+// Inno Setup leaves its uninstaller next to Folio.exe. A portable copy has none, so it is pointed to the release page instead.
+async function installedCopy() {
+  if (!app.isPackaged || process.platform !== 'win32') return false
+  const files = await readdir(path.dirname(process.execPath)).catch(() => [])
+  return files.some(file => /^unins\d{3}\.exe$/i.test(file))
+}
+
+function launchInstaller(file) {
+  return new Promise(resolve => {
+    const failed = error => {
+      console.error('Could not start the update installer:', error.message)
+      dialog.showErrorBox(t('Не удалось запустить установку обновления'), error.message)
+      resolve()
+    }
+    try {
+      const child = spawn(file, installerArguments(library.language), { detached: true, stdio: 'ignore' })
+      child.once('error', failed)
+      child.once('spawn', () => {
+        child.unref()
+        resolve()
+      })
+    } catch (error) {
+      failed(error)
+    }
+  })
 }
 
 function requestPlaybackFlush() {
@@ -202,7 +240,19 @@ function registerActions() {
   register('refresh', () => changeLibrary(progress => library.refresh(progress)))
   register('migrate', () => changeLibrary(progress => library.migrate(progress)))
   register('index-photos', () => changeLibrary(progress => library.indexPhotos(progress)))
-  register('library-settings', async () => ({ ...await library.storageInfo(playback.cache), backup: automaticBackup.status() }))
+  register('library-settings', async () => ({ ...await library.storageInfo(playback.cache), backup: automaticBackup.status(), watched: watcher.status() }))
+  register('watch-folder', async () => {
+    const folder = await chooseFolder(t('Выберите папку, за которой будет следить Folio'))
+    if (!folder) return null
+    const directory = await realpath(folder)
+    const storage = await realpath(library.mediaRoot)
+    if (isWithin(storage, directory) || isWithin(directory, storage)) throw new Error('Выберите папку за пределами хранилища Folio.')
+    if (storageJob) throw new Error('Дождитесь завершения текущей операции с медиатекой.')
+    await watcher.add(directory)
+    const result = await changeLibrary(progress => library.syncFolder(directory, progress))
+    return { ...result, folderId: library.folderIdFor(directory), watched: watcher.status() }
+  })
+  register('unwatch-folder', folder => watcher.remove(folder))
   register('move-library', async () => {
     const folder = await chooseFolder(t('Выберите папку для медиатеки.'))
     return folder ? changeLibrary(progress => library.moveTo(folder, progress)) : null
@@ -314,6 +364,10 @@ function registerActions() {
     }))
     return edited ? { id: edited, state: library.snapshot() } : null
   })
+  register('save-edits', async (ids, settings) => {
+    const result = await storageOperation(progress => editor.saveMany(ids, settings, progress))
+    return { ...result, state: library.snapshot() }
+  })
   register('wallpaper', id => editor.setWallpaper(id))
   register('attach', async (id, kind) => {
     if (!['audio', 'subtitle'].includes(kind)) return null
@@ -326,6 +380,27 @@ function registerActions() {
     })
     if (result.canceled) return null
     return playback.attach(id, await realpath(result.filePaths[0]), kind)
+  })
+  const updates = () => {
+    if (!updater) throw new Error('Обновления недоступны в этой сборке.')
+    return updater
+  }
+  register('update-status', () => updater?.status() ?? null)
+  register('update-check', () => updates().check())
+  register('update-download', () => updates().download())
+  register('update-cancel', () => { updater?.cancel() })
+  register('update-automatic', value => updates().setAutomatic(value))
+  register('update-page', async () => {
+    const page = updater?.update?.page
+    if (page) await shell.openExternal(page)
+  })
+  register('update-install', () => {
+    const file = updater?.readyInstaller()
+    if (!file) throw new Error('Обновление ещё не загружено.')
+    if (storageJob) throw new Error('Дождитесь завершения текущей операции с медиатекой.')
+    pendingInstaller = file
+    // Reply first; quitting flushes the library and then starts the installer.
+    setImmediate(() => app.quit())
   })
   register('window', action => {
     const current = window
@@ -619,6 +694,30 @@ if (!app.requestSingleInstanceLock()) {
         (Object.keys(library.state.items).length > 0 || Object.keys(library.state.trash).length > 0),
       backup: directory => storageOperation(progress => library.exportBackup(directory, progress)),
     })
+    watcher = new FolderWatcher({
+      read: () => library.preferences.watchedFolders,
+      save: folders => library.setPreferences({ watchedFolders: folders }),
+      scan: folder => library.newFiles(folder),
+      sync: (folder, ready) => storageOperation(progress => library.syncFolder(folder, progress, ready)),
+      available: () => !storageJob && !finalizing && Boolean(window),
+      publish: status => send('folio:watch-status', status),
+      activity: (folder, running) => send('folio:watch-activity', running ? { name: path.basename(folder) || folder } : null),
+      notify: change => send('folio:library-changed', {
+        added: change.added, name: change.name, folderId: library.folderIdFor(change.folder),
+      }),
+    })
+    // Development runs check a local test feed only when one is given; packaged builds always use GitHub Releases.
+    const updateFeed = !app.isPackaged && process.env.FOLIO_UPDATE_FEED
+    const updateDirectory = path.join(data, 'Updates')
+    if (app.isPackaged || updateFeed) {
+      updater = new Updater({
+        version: app.getVersion(), feed: updateFeed || releaseFeed, directory: updateDirectory,
+        fetch: (url, options) => net.fetch(url, options), installable: Boolean(updateFeed) || await installedCopy(),
+        read: () => library.preferences.updates, save: settings => library.setPreferences({ updates: settings }),
+        publish: status => send('folio:update-status', status),
+      })
+      removeFinishedDownloads(updateDirectory, app.getVersion()).catch(() => {})
+    }
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
       callback(canFullscreen(contents, permission, details.requestingUrl, details.isMainFrame))
     })
@@ -638,6 +737,14 @@ if (!app.requestSingleInstanceLock()) {
     }
     automaticBackupTimer = setInterval(checkBackup, 60_000)
     checkBackup()
+    watcher.start()
+    if (updater) {
+      const checkUpdates = () => {
+        if (!finalizing) updater.tick().catch(error => console.error(error.message))
+      }
+      updateTimer = setInterval(checkUpdates, 60 * 60_000)
+      setTimeout(checkUpdates, 15_000)
+    }
   }).catch(error => {
     dialog.showErrorBox(t('Не удалось запустить Folio'), error.message)
     app.quit()
@@ -648,9 +755,16 @@ if (!app.requestSingleInstanceLock()) {
     finalizing = true
     lockVault()
     clearInterval(automaticBackupTimer)
+    clearInterval(updateTimer)
+    updater?.cancel()
+    watcher?.stop()
     const completed = storageJob?.catch(error => console.error(error.message))
     Promise.all([requestPlaybackFlush(), completed, vault?.settle()]).then(() => Promise.all([library.flushRecent(), library.flushPlayback(), library.preferencesPending]))
-      .catch(error => console.error(error.message)).finally(() => app.quit())
+      .catch(error => console.error(error.message)).finally(async () => {
+        // The installer starts only after the library is saved, so it never replaces files under a running Folio.
+        if (pendingInstaller) await launchInstaller(pendingInstaller)
+        app.quit()
+      })
   })
   app.on('window-all-closed', () => app.quit())
 }

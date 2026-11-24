@@ -1,0 +1,54 @@
+name: Windows build tools
+description: FFmpeg for tests and packaging, and optionally Inno Setup, both pinned by version and SHA-256.
+
+inputs:
+  inno-setup:
+    description: Also install the Inno Setup compiler.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Restore FFmpeg
+      id: ffmpeg-cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}\ffmpeg
+        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ env.FFMPEG_SHA256 }}
+
+    - name: Download FFmpeg
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+        $unpacked = Join-Path $env:RUNNER_TEMP 'ffmpeg-unpacked'
+        Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-$env:FFMPEG_VERSION-essentials_build.zip" -OutFile $zip
+        $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne $env:FFMPEG_SHA256) { throw "FFmpeg archive checksum mismatch: $hash" }
+        Expand-Archive $zip -DestinationPath $unpacked
+        $bin = (Get-ChildItem $unpacked -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName
+        New-Item -ItemType Directory -Force (Join-Path $env:RUNNER_TEMP 'ffmpeg') | Out-Null
+        Copy-Item (Join-Path $bin 'ffmpeg.exe'), (Join-Path $bin 'ffprobe.exe') (Join-Path $env:RUNNER_TEMP 'ffmpeg')
+
+    - name: Use FFmpeg
+      shell: pwsh
+      run: |
+        $dir = Join-Path $env:RUNNER_TEMP 'ffmpeg'
+        "FOLIO_FFMPEG_DIR=$dir" >> $env:GITHUB_ENV
+        $dir >> $env:GITHUB_PATH
+        & (Join-Path $dir 'ffmpeg.exe') -hide_banner -version | Select-Object -First 1
+
+    - name: Install Inno Setup
+      if: inputs.inno-setup == 'true'
+      shell: pwsh
+      run: |
+        $setup = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+        $target = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+        $tag = 'is-' + $env:INNO_VERSION.Replace('.', '_')
+        Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$env:INNO_VERSION-x64.exe" -OutFile $setup
+        $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne $env:INNO_SHA256) { throw "Inno Setup checksum mismatch: $hash" }
+        Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=$target" -Wait
+        $compiler = Join-Path $target 'ISCC.exe'
+        if (-not (Test-Path $compiler)) { throw 'Inno Setup did not install its compiler.' }
+        "FOLIO_ISCC_PATH=$compiler" >> $env:GITHUB_ENV

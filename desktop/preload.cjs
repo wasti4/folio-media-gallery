@@ -43,10 +43,41 @@ contextBridge.exposeInMainWorld('folio', {
     ipcRenderer.on('folio:backup-status', listener)
     return () => ipcRenderer.removeListener('folio:backup-status', listener)
   },
+  watchFolder: invoke('watch-folder'),
+  unwatchFolder: invoke('unwatch-folder'),
+  observeWatched: callback => {
+    const listener = (_, status) => callback(status)
+    ipcRenderer.on('folio:watch-status', listener)
+    return () => ipcRenderer.removeListener('folio:watch-status', listener)
+  },
+  observeWatchActivity: callback => {
+    const listener = (_, activity) => callback(activity)
+    ipcRenderer.on('folio:watch-activity', listener)
+    return () => ipcRenderer.removeListener('folio:watch-activity', listener)
+  },
+  observeLibrary: callback => {
+    const listener = (_, change) => callback(change)
+    ipcRenderer.on('folio:library-changed', listener)
+    return () => ipcRenderer.removeListener('folio:library-changed', listener)
+  },
   observeStorage: callback => {
     const listener = (_, progress) => callback(progress)
     ipcRenderer.on('folio:storage-progress', listener)
     return () => ipcRenderer.removeListener('folio:storage-progress', listener)
+  },
+  updates: {
+    status: invoke('update-status'),
+    check: invoke('update-check'),
+    download: invoke('update-download'),
+    cancel: invoke('update-cancel'),
+    setAutomatic: invoke('update-automatic'),
+    openPage: invoke('update-page'),
+    install: invoke('update-install'),
+    observe: callback => {
+      const listener = (_, status) => callback(status)
+      ipcRenderer.on('folio:update-status', listener)
+      return () => ipcRenderer.removeListener('folio:update-status', listener)
+    },
   },
   favorite: invoke('favorite'),
   opened: invoke('opened'),
@@ -76,6 +107,7 @@ contextBridge.exposeInMainWorld('folio', {
   editClip: invoke('edit-clip'),
   stopEditPreview: invoke('stop-edit-preview'),
   saveEdit: invoke('save-edit'),
+  saveEdits: invoke('save-edits'),
   cancelEditSave: invoke('cancel-edit-save'),
   observeEdit: callback => {
     const listener = (_, fraction) => callback(fraction)

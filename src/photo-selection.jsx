@@ -1,8 +1,8 @@
-import { Check, ChevronDown, Folder, FolderInput, FolderPlus, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Folder, FolderInput, FolderPlus, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useLocale } from './localization.jsx'
 import { IconButton, Menu, MenuItem } from './ui.jsx'
 
-export function SelectionDock({ count, total, selectAll, openFolders, remove, close, working, menuOpen }) {
+export function SelectionDock({ count, total, selectAll, openFolders, edit, remove, close, working, menuOpen }) {
   const { t, language } = useLocale()
   return <div className="selection-dock" role="group" aria-label={t('Действия с выбранными фото')} aria-busy={Boolean(working)}>
     <span className="selection-count" aria-live="polite">
@@ -18,6 +18,8 @@ export function SelectionDock({ count, total, selectAll, openFolders, remove, cl
       <span>{working?.name || t('В папку')}</span>
       <ChevronDown size={13} aria-hidden="true" />
     </button>
+    {edit && <IconButton icon={SlidersHorizontal} label={t('Править выбранные фото')} className="selection-edit" size={17}
+      disabled={!count || Boolean(working)} onClick={edit} />}
     <IconButton icon={Trash2} label={t('Удалить выбранные фото')} className="selection-trash" size={17}
       disabled={!count || Boolean(working)} data-photo-target="trash" onClick={remove} />
     <IconButton icon={X} label={t('Завершить выбор')} className="selection-close" size={16} disabled={Boolean(working)} onClick={close} />

@@ -125,6 +125,8 @@ export class Library {
       language: normalizeLanguage(settings?.language),
       onboarded: settings?.onboarded === true,
       automaticBackup: settings?.automaticBackup,
+      updates: settings?.updates,
+      watchedFolders: settings?.watchedFolders,
     })
     await mkdir(library.mediaRoot, { recursive: true })
     return library
@@ -337,6 +339,69 @@ export class Library {
     }).catch(error => {
       if (error === canceledImport) return { canceled: true }
       throw error
+    })
+  }
+
+  folderIdFor(directory) { return 'folder-' + idForPath(directory) }
+
+  knows(file) {
+    const id = idForPath(file)
+    return Boolean(this.state.items[id] || this.state.removed[id] || this.state.trash[id])
+  }
+
+  // Media under a folder that Folio has neither imported nor been told to forget. Reads only, so a watched
+  // folder can be checked often without rewriting the library index.
+  async newFiles(folder) {
+    const storage = await realpath(this.mediaRoot)
+    const found = []
+    const pending = [folder]
+    while (pending.length) {
+      const dir = pending.pop()
+      if (isWithin(storage, dir)) continue
+      const entries = await readdir(dir, { withFileTypes: true }).catch(() => null)
+      if (!entries || entries.some(entry => entry.name === backupManifest && entry.isFile())) continue
+      for (const entry of entries) {
+        const file = path.join(dir, entry.name)
+        if (entry.isDirectory()) pending.push(file)
+        else if (entry.isFile() && mediaKind(entry.name) && !this.knows(file)) found.push(file)
+      }
+    }
+    return found
+  }
+
+  // Imports what was added to a watched folder. Unlike a manual import it keeps media the user deleted from
+  // Folio out, skips exact copies of files already in the library without asking, and takes only `ready`
+  // files when given, so a file that is still being written waits for the next pass.
+  syncFolder(folder, progress, ready) {
+    const allowed = ready && new Set([...ready].map(pathKey))
+    return this.update(async (draft, created) => {
+      const storage = await realpath(this.mediaRoot)
+      let root = draft.roots.find(item => pathKey(item.path) === pathKey(folder))
+      if (!root) {
+        root = { path: folder, ids: [] }
+        draft.roots.push(root)
+      }
+      const before = new Set(Object.keys(draft.items))
+      const inventories = new Map()
+      const skipped = await indexFolder(root, draft, storage, inventories)
+      const waiting = new Set(allowed ? root.ids.filter(id => !before.has(id) && !allowed.has(pathKey(draft.items[id].file))) : [])
+      for (const id of waiting) delete draft.items[id]
+      root.ids = root.ids.filter(id => !waiting.has(id))
+      prune(draft)
+      const incoming = root.ids.filter(id => !before.has(id))
+      const known = Object.values(this.state.items).map(item => ({ ...item, file: item.stored ? assetFile(this.mediaRoot, item.stored) : item.file }))
+      const { duplicates, hashes } = await findImportDuplicates(incoming.map(id => draft.items[id]), known)
+      for (const { id } of duplicates) {
+        draft.removed[id] = true
+        delete draft.items[id]
+      }
+      const fresh = incoming.filter(id => draft.items[id])
+      const work = await this.copyItems(draft, fresh, created, progress, true, inventories, hashes)
+      for (const id of fresh) if (!draft.items[id]?.stored) delete draft.items[id]
+      root.ids = root.ids.filter(id => draft.items[id])
+      const added = fresh.filter(id => draft.items[id]).length
+      if (added) draft.initialized = true
+      return { added, skipped: skipped + work.skipped, ...(duplicates.length ? { skippedDuplicates: duplicates.length } : {}) }
     })
   }
 

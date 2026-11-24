@@ -1,10 +1,87 @@
 import { useEffect, useState } from 'react'
-import { FolderOpen, HardDrive, History, LoaderCircle, RotateCcw, Trash2 } from 'lucide-react'
+import { CircleArrowUp, Folder, FolderOpen, FolderPlus, FolderSync, HardDrive, History, LoaderCircle, RotateCcw, Trash2, X } from 'lucide-react'
 import { useLocale } from './localization.jsx'
 import { mediaApi } from './media-api.mjs'
 import { Dialog, IconButton, Picture } from './ui.jsx'
 import { translateError } from '../shared/locale.mjs'
 import './library-settings.css'
+
+const watchErrors = { unavailable: 'Папка недоступна', failed: 'Не удалось импортировать новые файлы' }
+
+function WatchedFolders({ folders, busy, perform, progress, action, added }) {
+  const { t } = useLocale()
+  return <section className="settings-section" aria-labelledby="settings-watched-title">
+    <h3 id="settings-watched-title"><FolderSync size={18} />{t('Отслеживаемые папки')}</h3>
+    <p>{t('Новые фото и видео из этих папок появляются в Folio сами, пока он открыт.')}</p>
+    {folders.length > 0 && <ul className="settings-watched">
+      {folders.map(folder => <li key={folder.path}>
+        <Folder size={16} aria-hidden="true" />
+        <div>
+          <strong>{folder.name}</strong>
+          <span className="settings-path" title={folder.path}>{folder.path}</span>
+          {watchErrors[folder.error] && <span className="settings-error">{t(watchErrors[folder.error])}</span>}
+        </div>
+        <IconButton icon={X} size={15} label={t('Не следить за «{name}»', { name: folder.name })} disabled={busy}
+          onClick={() => perform('unwatch', () => mediaApi.unwatchFolder(folder.path))} />
+      </li>)}
+    </ul>}
+    <button type="button" className="outline-button" disabled={busy} onClick={() => perform('watch', async () => {
+      const result = await mediaApi.watchFolder()
+      if (result) added(result)
+    })}><FolderPlus size={16} />{t('Следить за папкой…')}</button>
+    {action === 'watch' && progress?.total > 0 && <progress aria-label={t('Копируем в Folio')} max={progress.total} value={progress.done} />}
+  </section>
+}
+
+function UpdateSettings({ status }) {
+  const { t, language } = useLocale()
+  const [pending, setPending] = useState('')
+  const [error, setError] = useState('')
+  const { state, available, current, automatic, progress, checkedAt } = status
+  async function run(name, operation) {
+    setPending(name)
+    setError('')
+    try { await operation() } catch (failure) { setError(translateError(language, failure)) } finally { setPending('') }
+  }
+  const date = value => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(value)
+  const summary = state === 'checking' ? t('Проверяем обновления…')
+    : state === 'downloading' ? t('Загружаем версию {version} · {percent}%', { version: available.version, percent: Math.floor(progress * 100) })
+    : state === 'ready' ? t('Версия {version} загружена и готова к установке', { version: available.version })
+    : available ? t('Доступна версия {version}', { version: available.version })
+    : state === 'current' ? t('Установлена последняя версия')
+    : checkedAt ? t('Последняя проверка: {date}', { date: date(checkedAt) }) : t('Обновления ещё не проверялись')
+  const busy = Boolean(pending) || state === 'checking'
+  const failure = error || (status.error && translateError(language, { message: status.error }))
+  return <section className="settings-section settings-updates" aria-labelledby="settings-updates-title">
+    <h3 id="settings-updates-title"><CircleArrowUp size={18} />{t('Обновления')}</h3>
+    <div className="settings-update">
+      <div>
+        <strong>Folio {current}</strong>
+        <span role="status">{summary}</span>
+      </div>
+      <div className="settings-update-actions">
+        {state === 'ready' && <button type="button" className="primary-button" disabled={busy}
+          onClick={() => run('install', () => mediaApi.updates.install())}>{t('Перезапустить и обновить')}</button>}
+        {state === 'downloading' && <button type="button" className="outline-button" onClick={() => mediaApi.updates.cancel()}>{t('Остановить загрузку')}</button>}
+        {available?.downloadable && !['downloading', 'ready'].includes(state) && <button type="button" className="primary-button" disabled={busy}
+          onClick={() => run('download', () => mediaApi.updates.download())}>{t('Загрузить обновление')}</button>}
+        {available?.page && <button type="button" className="outline-button" onClick={() => run('page', () => mediaApi.updates.openPage())}>
+          {t(available.downloadable ? 'Что нового' : 'Открыть страницу загрузки')}</button>}
+        {!available && <button type="button" className="outline-button" disabled={busy}
+          onClick={() => run('check', () => mediaApi.updates.check())}>{state === 'checking' ? <LoaderCircle size={15} className="spinning" /> : null}{t('Проверить сейчас')}</button>}
+      </div>
+    </div>
+    {state === 'downloading' && <progress aria-label={t('Загружаем обновление')} max={1} value={progress} />}
+    {available && !available.downloadable && <p>{t('Эту копию Folio нужно обновить вручную: скачайте новую версию со страницы выпуска.')}</p>}
+    <label className="settings-check">
+      <input type="checkbox" checked={automatic} disabled={Boolean(pending)}
+        onChange={event => { const value = event.target.checked; run('automatic', () => mediaApi.updates.setAutomatic(value)) }} />
+      {t('Проверять обновления автоматически')}
+    </label>
+    <p>{t('Раз в день Folio спрашивает у GitHub, вышла ли новая версия. Больше ничего не отправляется.')}</p>
+    {failure && <p className="settings-error" role="alert">{failure}</p>}
+  </section>
+}
 
 function sizeLabel(bytes, language) {
   if (bytes == null) return '—'
@@ -13,7 +90,7 @@ function sizeLabel(bytes, language) {
   return new Intl.NumberFormat(language, { style: 'unit', unit: formats[power], maximumFractionDigits: 1 }).format(bytes / 1000 ** power)
 }
 
-export function LibrarySettings({ close, moved, progress }) {
+export function LibrarySettings({ close, moved, progress, update, watchedAdded }) {
   const { t, language } = useLocale()
   const [info, setInfo] = useState(null)
   const [action, setAction] = useState('')
@@ -25,7 +102,8 @@ export function LibrarySettings({ close, moved, progress }) {
       if (active) setError(translateError(language, failure))
     })
     const unsubscribe = mediaApi.observeBackupStatus(status => setInfo(current => current && { ...current, backup: status }))
-    return () => { active = false; unsubscribe() }
+    const stopWatching = mediaApi.observeWatched(watched => setInfo(current => current && { ...current, watched }))
+    return () => { active = false; unsubscribe(); stopWatching() }
   }, [language])
 
   async function perform(name, operation) {
@@ -36,7 +114,7 @@ export function LibrarySettings({ close, moved, progress }) {
 
   const date = value => value ? new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(value) : '—'
   const backup = info?.backup
-  return <Dialog title={t('Настройки медиатеки')} onClose={() => { if (!action) close() }} className="library-settings">
+  return <Dialog title={t('Настройки')} onClose={() => { if (!action) close() }} className="library-settings">
     {!info && !error && <div className="settings-loading" role="status"><LoaderCircle size={18} />{t('Загружаем медиатеку…')}</div>}
     {info && <>
       <section className="settings-section">
@@ -86,7 +164,18 @@ export function LibrarySettings({ close, moved, progress }) {
         <p>{t('Копии по расписанию создаются, пока Folio открыт.')}</p>
         {backup.lastFailure && <p className="settings-error" role="status">{translateError(language, { message: backup.lastFailure })}</p>}
       </section>
+      <WatchedFolders folders={info.watched ?? []} busy={Boolean(action || backup.running)} action={action} progress={progress}
+        perform={(name, operation) => perform(name, async () => {
+          const result = await operation()
+          if (Array.isArray(result)) setInfo(current => ({ ...current, watched: result }))
+        })}
+        added={result => {
+          setInfo(current => ({ ...current, watched: result.watched }))
+          watchedAdded(result)
+          mediaApi.librarySettings().then(fresh => setInfo(current => current && { ...current, ...fresh }), () => {})
+        }} />
     </>}
+    {update && <UpdateSettings status={update} />}
     {error && <p className="settings-error" role="alert">{error}</p>}
   </Dialog>
 }

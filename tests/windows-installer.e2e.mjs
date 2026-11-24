@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { promisify } from 'node:util'
 import { _electron as electron } from 'playwright'
 import { compileWindowsInstaller, findInnoSetup } from '../scripts/build/windows-installer.mjs'
+import { installerArguments } from '../desktop/updates.mjs'
 
 if (process.platform !== 'win32') throw new Error('This test requires Windows.')
 const [previousPayload, nextPayload, workDirectory] = process.argv.slice(2)
@@ -65,6 +66,24 @@ async function close() {
   app = undefined
 }
 
+// Folio processes started from the test installation, wherever they came from.
+async function installedProcesses() {
+  const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    "Get-CimInstance Win32_Process -Filter \"Name = 'Folio.exe'\" | ForEach-Object { [string]$_.ProcessId + '|' + $_.ExecutablePath }"])
+  const target = path.resolve(executable).toLowerCase()
+  return stdout.split(/\r?\n/).map(line => line.trim().split('|')).filter(([, file]) => file && path.resolve(file).toLowerCase() === target)
+    .map(([pid]) => Number(pid))
+}
+
+async function waitForProcesses(present) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const running = await installedProcesses()
+    if (present ? running.length : !running.length) return running
+    await delay(250)
+  }
+  return installedProcesses()
+}
+
 try {
   const previous = await readVersion(previousPayload)
   const next = await readVersion(nextPayload)
@@ -113,6 +132,7 @@ try {
   await writeFile(unrelated, 'Retain files outside the installer inventory.')
   // Omit /DIR: the new installer must find the registered custom location.
   await run(newSetup, [...silent, '/LANG=russian', '/LOG=' + path.join(scratch, 'upgrade.log')])
+  assert.deepEqual(await installedProcesses(), [], 'a plain silent install does not start Folio')
   assert.equal(await registeredVersion(), next)
   assert.equal(await readVersion(install), next)
   assert.deepEqual(await readJson(libraryFile), beforeUpdate)
@@ -136,6 +156,13 @@ try {
   }, item.url)
   assert.deepEqual(accessible, { ok: true, bytes: source.length })
   await close()
+  // Folio's own updater runs the installer silently and expects Folio to come back once the files are in place.
+  await run(newSetup, [...installerArguments('en'), '/LOG=' + path.join(scratch, 'self-update.log')])
+  const relaunched = await waitForProcesses(true)
+  assert.ok(relaunched.length > 0, 'the updater arguments restart Folio after installing')
+  for (const pid of relaunched) await run('taskkill.exe', ['/PID', String(pid), '/T', '/F']).catch(() => {})
+  assert.deepEqual(await waitForProcesses(false), [])
+  assert.equal(await registeredVersion(), next)
   const beforeUninstall = await readJson(libraryFile)
   const appearanceBeforeUninstall = await readJson(appearanceFile)
 
@@ -148,7 +175,7 @@ try {
   assert.deepEqual(await readJson(appearanceFile), appearanceBeforeUninstall)
   assert.deepEqual(await readFile(stored), source)
   passed = true
-  console.log(`Folio ${previous} → ${next}: per-user install, custom location reuse, bundled FFmpeg tools, preserved original, favorite, collection, history and theme, and library retained after uninstall.`)
+  console.log(`Folio ${previous} → ${next}: per-user install, custom location reuse, bundled FFmpeg tools, preserved original, favorite, collection, history and theme, relaunch after a self-update, and library retained after uninstall.`)
 } finally {
   if (app) await close().catch(error => console.error(error.message))
   if (passed) {

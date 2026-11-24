@@ -98,7 +98,7 @@ export function Sidebar({ state, active, navigate, createFolder, expanded, setEx
   </aside>
 }
 
-export function Titlebar({ search, setSearch, searchRef, openImport, importing, changeTheme, openLanguage, openSettings, undo, privateScope }) {
+export function Titlebar({ search, setSearch, searchRef, openImport, importing, changeTheme, openLanguage, openSettings, undo, privateScope, updateReady }) {
   const { t } = useLocale()
   const [maximized, setMaximized] = useState(false)
   const maximize = async () => setMaximized(await mediaApi.window('maximize'))
@@ -113,7 +113,8 @@ export function Titlebar({ search, setSearch, searchRef, openImport, importing, 
       <ThemeSwitch change={changeTheme} />
       <IconButton icon={Globe2} label={t('Язык интерфейса')} data-popup-trigger aria-haspopup="menu" onClick={openLanguage} />
       {undo && <IconButton icon={Undo2} label={t('Отменить перемещение')} onClick={undo} />}
-      {openSettings && <IconButton icon={Settings2} label={t('Настройки медиатеки')} onClick={openSettings} />}
+      {openSettings && <IconButton icon={Settings2} label={t(updateReady ? 'Настройки — доступно обновление' : 'Настройки')}
+        className={updateReady ? 'has-update' : ''} onClick={openSettings} />}
       {!privateScope && <button className="primary-button import-button" type="button" onClick={openImport} data-popup-trigger aria-label={t('Импорт')} aria-haspopup="menu" disabled={importing}>
         <Plus size={17} strokeWidth={1.8} />
         <span>{t(importing ? 'Импорт…' : 'Импорт')}</span>

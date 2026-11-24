@@ -121,8 +121,8 @@ try {
   await button(page, 'All files').click()
   await button(page, 'Open “Coast”').waitFor()
 
-  await button(page, 'Library settings').click()
-  const settings = page.getByRole('dialog', { name: 'Library settings', exact: true })
+  await button(page, 'Settings').click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
   await choose([destination])
   await button(settings, 'Move library…').click()
   await settings.getByText(destination, { exact: true }).waitFor()

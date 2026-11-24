@@ -97,3 +97,50 @@ test('photo export mirrors the source before applying the crop and includes the 
   assert.ok(adjusted[0] > unheated[0] + 3 && adjusted[2] < unheated[2] - 3)
   assert.equal(adjusted[3], 255)
 })
+
+test('a batch edit saves a rotated, toned copy of every selected photo and leaves framing alone', async t => {
+  const { root, library, playback, editor } = await setup(t)
+  for (const [name, size] of [['Wide.png', '40x20'], ['Tall.png', '20x30']]) {
+    await exec(playback.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x806040:s=' + size + ',format=rgba',
+      '-frames:v', '1', '-update', '1', path.join(root, name)])
+  }
+  await copyFile('public/demo/dolomites.mp4', path.join(root, 'Clip.mp4'))
+  await library.importPaths([path.join(root, 'Wide.png'), path.join(root, 'Tall.png'), path.join(root, 'Clip.mp4')])
+  const items = library.snapshot().items
+  const originals = new Map(await Promise.all(items.map(async item => [item.id, await readFile(library.file(item.id).file)])))
+  const steps = []
+  const result = await editor.saveMany(items.map(item => item.id), {
+    rotation: 1, saturation: -100, crop: { x: 0.5, y: 0.5, width: 0.5, height: 0.5 },
+  }, (done, total) => steps.push([done, total]))
+  assert.equal(result.total, 2, 'videos are not part of a photo batch')
+  assert.equal(result.saved.length, 2)
+  assert.equal(result.failed, 0)
+  assert.equal(result.canceled, false)
+  assert.deepEqual(steps, [[0, 2], [1, 2], [2, 2]])
+  const sizes = await Promise.all(result.saved.map(async id => {
+    const meta = await playback.metadata(library.file(id))
+    return meta.streams[0].width + 'x' + meta.streams[0].height
+  }))
+  assert.deepEqual(sizes.sort(), ['20x40', '30x20'], 'each copy is rotated as a whole, without the crop')
+  const { stdout } = await exec(playback.ffmpeg, ['-v', 'error', '-i', library.file(result.saved[0]).file, '-frames:v', '1',
+    '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'], { encoding: 'buffer' })
+  assert.ok(Math.abs(stdout[0] - stdout[2]) <= 2, 'the copy is desaturated')
+  for (const [id, bytes] of originals) assert.deepEqual(await readFile(library.file(id).file), bytes)
+  await assert.rejects(editor.saveMany(items.map(item => item.id), { crop: { x: 0.2, y: 0, width: 0.5, height: 1 } }), /Нет правок/)
+  await assert.rejects(editor.saveMany([items.find(item => item.kind === 'video').id], { contrast: 10 }), /Выберите фотографии/)
+})
+
+test('canceling a batch edit stops after the photo being saved', async t => {
+  const { root, library, playback, editor } = await setup(t)
+  const files = ['One.png', 'Two.png', 'Three.png'].map(name => path.join(root, name))
+  for (const file of files) {
+    await exec(playback.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x336699:s=16x16', '-frames:v', '1', '-update', '1', file])
+  }
+  await library.importPaths(files)
+  const ids = library.snapshot().items.map(item => item.id)
+  const result = await editor.saveMany(ids, { contrast: 20 }, done => { if (done === 1) editor.cancelSave() })
+  assert.equal(result.canceled, true)
+  assert.equal(result.saved.length, 1)
+  assert.equal(library.snapshot().items.length, 4)
+  assert.equal(editor.batch, null)
+})

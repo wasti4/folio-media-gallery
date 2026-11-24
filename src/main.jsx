@@ -15,6 +15,7 @@ import { Viewer } from './viewer.jsx'
 import { SeriesView } from './series.jsx'
 import { LibraryFilters, PhotoTagsField } from './library-search.jsx'
 import { DeletedPhotos, LibrarySettings } from './library-settings.jsx'
+import { BatchEditor } from './batch-editor.jsx'
 import { PrivateGallery } from './private-gallery.jsx'
 import { Intro } from './intro.jsx'
 import { Localization } from './localization.jsx'
@@ -88,6 +89,11 @@ function App() {
   const [storageProgress, setStorageProgress] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [toast, setToast] = useState(null)
+  const [batch, setBatch] = useState(null)
+  const [update, setUpdate] = useState(null)
+  const [watchJob, setWatchJob] = useState(null)
+  const announcedUpdate = useRef('')
+  const latest = useRef(null)
   const dragDepth = useRef(0)
   const toastTimer = useRef(null)
   const focusReturn = useRef(null)
@@ -145,6 +151,7 @@ function App() {
     setToast({ text, error, openFolder })
     toastTimer.current = setTimeout(() => setToast(null), error || openFolder ? 5300 : 2900)
   }, [])
+  latest.current = { t, language }
 
   function changeTheme(value) {
     applyTheme(value)
@@ -224,6 +231,38 @@ function App() {
     return () => clearTimeout(toastTimer.current)
   }, [notify])
   useEffect(() => mediaApi.observeStorage?.(setStorageProgress), [])
+  useEffect(() => mediaApi.observeWatchActivity?.(activity => {
+    setWatchJob(activity)
+    if (!activity) setStorageProgress(null)
+  }), [])
+  // A watched folder changes the library in the background. The state is read again once no other
+  // operation is about to apply its own, older snapshot.
+  useEffect(() => mediaApi.observeLibrary?.(change => {
+    const apply = () => {
+      if (importing.current || mutatingPhotos.current) {
+        setTimeout(apply, 400)
+        return
+      }
+      Promise.resolve(mediaApi.state()).then(setState).catch(() => {})
+    }
+    apply()
+    if (!change.added) return
+    const { t, language } = latest.current
+    notify(t('Из «{name}» добавлено {count}', { name: change.name, count: quantity(change.added, fileForms, language) }), false, change.folderId)
+  }), [notify])
+  useEffect(() => {
+    if (!mediaApi.updates) return
+    let active = true
+    mediaApi.updates.status().then(status => { if (active && status) setUpdate(status) }).catch(() => {})
+    const stop = mediaApi.updates.observe(setUpdate)
+    return () => { active = false; stop() }
+  }, [])
+  useEffect(() => {
+    const version = update?.available?.version
+    if (!version || update.state !== 'available' || announcedUpdate.current === version) return
+    announcedUpdate.current = version
+    if (dialog?.kind !== 'settings') notify(t('Вышла новая версия Folio — {version}', { version }), false, { settings: true })
+  }, [update?.available?.version, update?.state])
 
   const closePopup = useCallback(() => setPopup(null), [])
   const reflectHistory = useCallback(() => {
@@ -328,7 +367,7 @@ function App() {
 
   useEffect(() => {
     function shortcut(event) {
-      if (viewer || dialog || intro || privateScope || event.defaultPrevented) return
+      if (viewer || batch || dialog || intro || privateScope || event.defaultPrevented) return
       const modifier = event.ctrlKey || event.metaKey
       const key = event.key.toLowerCase()
       const textInput = event.target.closest?.('input, textarea, [contenteditable]')
@@ -360,7 +399,7 @@ function App() {
     }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [viewer, dialog, intro, language, popup, picked, selectable, busy, state.canUndo, folder, scope, privateScope])
+  }, [viewer, batch, dialog, intro, language, popup, picked, selectable, busy, state.canUndo, folder, scope, privateScope])
 
   function clearSelection(restoreFocus = false) {
     pickAnchor.current = null
@@ -428,6 +467,31 @@ function App() {
       notify(errorText(error), true)
     }
   }, [errorText, notify])
+
+  function openBatch() {
+    if (importing.current || mutatingPhotos.current || !picked?.size) return
+    closePopup()
+    focusReturn.current = document.activeElement
+    setStorageProgress(null)
+    setBatch(selectable.filter(id => picked.has(id)))
+  }
+
+  function closeBatch() {
+    setBatch(null)
+    setStorageProgress(null)
+    requestAnimationFrame(() => { if (focusReturn.current?.isConnected) focusReturn.current.focus({ preventScroll: true }) })
+  }
+
+  function batchSaved(result) {
+    setState(result.state)
+    setBatch(null)
+    setStorageProgress(null)
+    clearSelection(true)
+    const count = result.saved.length
+    const text = result.canceled ? t('Сохранение остановлено. Сохранено копий: {count}', { count })
+      : t('Сохранено копий: {count}', { count }) + (result.failed ? ' · ' + t('не удалось: {count}', { count: result.failed }) : '')
+    notify(text, Boolean(result.failed))
+  }
 
   function savedFrame(result) {
     setState(result.state)
@@ -699,7 +763,7 @@ function App() {
       }}><div
     className={'app-root' + (expanded ? ' sidebar-expanded' : '')}
     onDragEnter={event => {
-      if (!dragContainsFiles(event) || privateScope || viewer || intro || dialog || mutatingPhotos.current) return
+      if (!dragContainsFiles(event) || privateScope || viewer || batch || intro || dialog || mutatingPhotos.current) return
       event.preventDefault()
       dragDepth.current += 1
       setDragging(true)
@@ -707,7 +771,7 @@ function App() {
     onDragOver={event => {
       if (dragContainsFiles(event)) {
         event.preventDefault()
-        event.dataTransfer.dropEffect = privateScope || viewer || intro || dialog || mutatingPhotos.current ? 'none' : 'copy'
+        event.dataTransfer.dropEffect = privateScope || viewer || batch || intro || dialog || mutatingPhotos.current ? 'none' : 'copy'
       }
     }}
     onDragLeave={event => {
@@ -719,13 +783,13 @@ function App() {
       event.preventDefault()
       dragDepth.current = 0
       setDragging(false)
-      if (!privateScope && !viewer && !intro && !dialog && !mutatingPhotos.current && event.dataTransfer.files.length) {
+      if (!privateScope && !viewer && !batch && !intro && !dialog && !mutatingPhotos.current && event.dataTransfer.files.length) {
         const files = [...event.dataTransfer.files]
         importItems(() => mediaApi.drop(files))
       }
     }}>
     <div className="glass-grain" aria-hidden="true" />
-    <div className="app-shell" inert={Boolean(viewerItem || privateViewing || dialog || intro || photoOperation)} data-viewing={viewerItem || privateViewing ? '' : undefined}
+    <div className="app-shell" inert={Boolean(viewerItem || batch || privateViewing || dialog || intro || photoOperation)} data-viewing={viewerItem || batch || privateViewing ? '' : undefined}
       data-photo-operation={photoOperation && !dialog ? '' : undefined}
       data-arriving={intro === 'arrival' ? '' : undefined} onAnimationEnd={event => {
         if (event.target === event.currentTarget && event.animationName === 'gallery-arrive') setIntro('')
@@ -736,7 +800,7 @@ function App() {
         <Titlebar privateScope={privateScope} search={search} setSearch={value => { setSearch(value); clearSelection(); scrollRef.current?.scrollTo({ top: 0 }) }}
           searchRef={searchRef} openImport={showImport} importing={Boolean(busy)}
           changeTheme={changeTheme} openLanguage={event => showPopup(event, 'language')}
-          undo={state.canUndo && !busy ? undoMove : undefined}
+          undo={state.canUndo && !busy ? undoMove : undefined} updateReady={Boolean(update?.available)}
           openSettings={isDesktop ? event => { closePopup(); setDialog({ kind: 'settings', trigger: event.currentTarget }) } : undefined} />
         <main className="gallery-scroll" ref={scrollRef} data-selecting={selecting || undefined}>
           <div className="gallery-wrap">
@@ -783,7 +847,8 @@ function App() {
         {selecting && <SelectionDock count={picked.size} total={selectable.length} working={photoOperation || busy}
           menuOpen={popup?.kind === 'photo-folders'} close={() => { closePopup(); clearSelection(true) }}
           selectAll={() => { pickAnchor.current = null; setPicked(picked.size === selectable.length ? new Set() : new Set(selectable)) }}
-          openFolders={event => showPopup(event, 'photo-folders')} remove={() => confirmPhotoDeletion([...picked])} />}
+          openFolders={event => showPopup(event, 'photo-folders')} remove={() => confirmPhotoDeletion([...picked])}
+          edit={isDesktop ? openBatch : undefined} />}
       </div>
     </div>
     {popup?.kind === 'import' && <Menu anchor={popup.anchor} onClose={closePopup}>
@@ -867,9 +932,14 @@ function App() {
           <button className="primary-button" type="submit" disabled={dialog.waiting}>{t('Создать')}</button></div>
       </form>
     </Dialog>}
-    {dialog?.kind === 'settings' && <LibrarySettings close={cancelPhotoDialog} progress={storageProgress} moved={result => {
+    {dialog?.kind === 'settings' && <LibrarySettings close={cancelPhotoDialog} progress={storageProgress} update={update} moved={result => {
       setState(result.state)
       notify(t(result.retained ? 'Медиатека перенесена. Часть файлов осталась в прежней папке.' : 'Медиатека перенесена'), Boolean(result.retained))
+    }} watchedAdded={result => {
+      setState(result.state)
+      notify(result.added ? t('Добавлено {count}', { count: quantity(result.added, fileForms, language) }) +
+        (result.skippedDuplicates ? ' · ' + t('Пропущено {count}', { count: quantity(result.skippedDuplicates, duplicateForms, language) }) : '')
+        : t('Folio следит за папкой. Новые файлы появятся сами.'), false, result.added ? result.folderId : undefined)
     }} />}
     {dialog?.kind === 'photo-tags' && <Dialog title={t('Теги фотографии')} onClose={cancelPhotoDialog}>
       <form onSubmit={saveTags}>
@@ -902,6 +972,8 @@ function App() {
       <div className="dialog-actions"><button className="outline-button" onClick={() => setDialog(null)}>{t('Закрыть')}</button>
         <button className="primary-button" autoFocus onClick={() => openStorage('backup')}>{t('Открыть папку')}</button></div>
     </Dialog>}
+    {batch && <BatchEditor items={batch.map(id => itemById.get(id)).filter(Boolean)} progress={storageProgress}
+      close={closeBatch} saved={batchSaved} />}
     {viewerItem && <Viewer item={viewerItem} close={closeViewer} favorite={() => toggleFavorite(viewerItem.id)} blocked={Boolean(dialog || photoOperation)}
       startEditing={viewer.editing} edited={openEditedCopy}
       playbackProgress={state.playback?.[viewerItem.id]} onPlaybackProgress={updatePlayback} onFrameSaved={savedFrame}
@@ -912,19 +984,23 @@ function App() {
       direction={viewer.direction}
       neighbor={itemById.get(viewer.ids[viewer.index + (viewer.direction || 1)])} />}
     {dragging && <div className="drop-veil"><div><Images size={36} strokeWidth={1.4} /><h2>{t('Добавить в медиатеку')}</h2><p>{t('Отпустите, чтобы импортировать файлы')}</p></div></div>}
-    {progressJob && isDesktop && <div className="toast storage-progress" role="status">
+    {(progressJob || (watchJob && !batch && !photoOperation && dialog?.kind !== 'settings')) && isDesktop && <div className="toast storage-progress" role="status">
       <LoaderCircle size={19} aria-hidden="true" />
-      <span>{t(jobLabels[progressJob])}{storageProgress?.total > 0 && <> · {storageProgress.done} / {storageProgress.total}</>}</span>
+      <span>{progressJob ? t(jobLabels[progressJob]) : t('Импорт из «{name}»', { name: watchJob.name })}
+        {storageProgress?.total > 0 && <> · {storageProgress.done} / {storageProgress.total}</>}</span>
     </div>}
     {toast && <div className={'toast' + (toast.error ? ' is-error' : '')} role="status">
       {toast.error ? <CircleAlert size={19} /> : <Check size={19} />}<span>{toast.text}</span>
-      {toast.openFolder && <button type="button" className="toast-folder" onClick={() => {
-        if (toast.openFolder.photo) {
-          const photo = itemById.get(toast.openFolder.photo)
-          if (photo) openMedia(photo)
-        } else navigate(toast.openFolder)
-        setToast(null)
-      }}>{t(toast.openFolder.photo ? 'Открыть фото' : 'Открыть папку')}</button>}
+      {toast.openFolder && (toast.openFolder.photo || toast.openFolder.settings || state.folders.some(entry => entry.id === toast.openFolder)) &&
+        <button type="button" className="toast-folder" onClick={() => {
+          if (toast.openFolder.settings) {
+            if (!viewer && !batch && !dialog && !intro) setDialog({ kind: 'settings', trigger: document.activeElement })
+          } else if (toast.openFolder.photo) {
+            const photo = itemById.get(toast.openFolder.photo)
+            if (photo) openMedia(photo)
+          } else navigate(toast.openFolder)
+          setToast(null)
+        }}>{t(toast.openFolder.settings ? 'Подробнее' : toast.openFolder.photo ? 'Открыть фото' : 'Открыть папку')}</button>}
       <IconButton icon={X} size={14} label={t('Скрыть уведомление')} onClick={() => setToast(null)} />
     </div>}
     {intro && !prepared && <Intro phase={intro} finish={finishIntro} warmGallery={introMotion ? mediaApi.warmIntroGallery : undefined} />}
