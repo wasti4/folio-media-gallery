@@ -36,6 +36,8 @@ function WatchedFolders({ folders, busy, perform, progress, action, added }) {
 function UpdateSettings({ status }) {
   const { t, language } = useLocale()
   const [pending, setPending] = useState('')
+  // The box answers the click at once; the saved setting arrives with the next status.
+  const [automaticDraft, setAutomaticDraft] = useState(null)
   const [error, setError] = useState('')
   const { state, available, current, automatic, progress, checkedAt } = status
   async function run(name, operation) {
@@ -74,8 +76,12 @@ function UpdateSettings({ status }) {
     {state === 'downloading' && <progress aria-label={t('Загружаем обновление')} max={1} value={progress} />}
     {available && !available.downloadable && <p>{t('Эту копию Folio нужно обновить вручную: скачайте новую версию со страницы выпуска.')}</p>}
     <label className="settings-check">
-      <input type="checkbox" checked={automatic} disabled={Boolean(pending)}
-        onChange={event => { const value = event.target.checked; run('automatic', () => mediaApi.updates.setAutomatic(value)) }} />
+      <input type="checkbox" checked={automaticDraft ?? automatic} disabled={pending === 'automatic'}
+        onChange={event => {
+          const value = event.target.checked
+          setAutomaticDraft(value)
+          run('automatic', () => mediaApi.updates.setAutomatic(value)).finally(() => setAutomaticDraft(null))
+        }} />
       {t('Проверять обновления автоматически')}
     </label>
     <p>{t('Раз в день Folio спрашивает у GitHub, вышла ли новая версия. Больше ничего не отправляется.')}</p>
