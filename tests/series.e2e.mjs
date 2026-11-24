@@ -74,6 +74,8 @@ try {
   }, showFolder)
   await page.locator('.import-button').click()
   await page.getByRole('menuitem', { name: 'Добавить папку', exact: true }).click()
+  // A finished import returns to the library, so switch sections only after the files have arrived.
+  await button(page, 'Открыть «01»').waitFor({ timeout: 30000 })
   await openSeries(page)
   assert.equal(await page.locator('.series-card').count(), 0)
   assert.equal(await page.getByRole('heading', { name: 'Signal', exact: true }).count(), 1)
