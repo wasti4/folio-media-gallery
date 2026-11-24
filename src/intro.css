@@ -65,7 +65,7 @@
 }
 .intro-header { position: relative; z-index: 3; -webkit-app-region: drag; }
 .intro-brand, .intro-settings { display: flex; align-items: center; gap: 10px; }
-.intro-brand { font-weight: 780; font-size: 17px; letter-spacing: -.025em; }
+.intro-brand { font-weight: 650; font-size: 17px; letter-spacing: -.025em; }
 .intro-brand .brand-mark { width: 32px; height: 32px; flex-basis: 32px; }
 .intro-frame :is(.intro-language, .intro-skip, .intro-back) {
   min-height: 34px;
@@ -75,7 +75,7 @@
   color: var(--text);
   padding-inline: 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   -webkit-app-region: no-drag;
   transition: background-color .18s var(--ease);
 }
@@ -105,7 +105,7 @@
   background: transparent;
 }
 .intro-frame .intro-continue:focus-visible { outline-offset: -7px; }
-.intro-hint { position: absolute; inset-inline: 12px; bottom: 31px; text-align: center; color: var(--muted); font-size: 12px; }
+.intro-hint { position: absolute; inset-inline: 12px; bottom: 31px; text-align: center; color: var(--muted); font-size: 13px; }
 .intro-frame[data-welcome="leaving"] .intro-greetings { animation: intro-greetings-out .23s var(--ease) both; }
 .intro-frame[data-welcome="leaving"] :is(.intro-hello, .intro-pen-stroke) { animation-play-state: paused; }
 @keyframes intro-greetings-out { to { opacity: 0; transform: translateY(-4px); } }
@@ -155,7 +155,7 @@
   to { opacity: 0; transform: translateX(calc(-12px * var(--step-direction))) translateY(-2px); }
 }
 .intro-copy { max-width: 530px; text-align: center; }
-.intro-copy h1 { margin: 0 0 8px; font-size: clamp(22px, 3.6vw, 40px); letter-spacing: -.041em; font-weight: 780; }
+.intro-copy h1 { margin: 0 0 8px; font-size: clamp(22px, 3.6vw, 40px); letter-spacing: -.041em; font-weight: 650; }
 .intro-copy p { margin: 0; color: var(--muted); font-size: clamp(12px, 1.6vw, 15px); line-height: 1.55; }
 .intro-art { position: relative; width: min(75%, 400px); }
 .intro-stack { aspect-ratio: 2.04; }
@@ -191,7 +191,7 @@
   box-shadow: 0 12px 40px var(--intro-art-shadow);
 }
 .intro-vault-icon { display: grid; place-items: center; width: 64px; height: 64px; background: var(--intro-control-hover); border-radius: 16px; }
-.intro-vault-label { display: grid; gap: 7px; font-size: 12px; }
+.intro-vault-label { display: grid; gap: 7px; font-size: 13px; }
 .intro-vault-label > span { display: flex; align-items: center; gap: 7px; color: var(--muted); }
 .intro-footer { padding-top: 16px; padding-bottom: 21px; display: grid; grid-template-columns: 1fr auto 1fr; }
 .intro-frame .intro-back { justify-self: start; padding: 0; }

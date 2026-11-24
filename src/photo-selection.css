@@ -32,7 +32,7 @@
   transition: background .17s, border-color .17s;
 }
 .media-view-list .card-selection { inset: 6px auto auto 6px; width: 23px; height: 23px; border-radius: 7px; }
-.card-selection > svg { opacity: 0; scale: .62; transition: opacity .13s, scale .24s cubic-bezier(.18, 1.4, .35, 1); }
+.card-selection > svg { opacity: 0; scale: .62; transition: opacity .13s, scale .24s cubic-bezier(.22, 1, .36, 1); }
 [data-picked] .card-selection { background: #f0ece3; border-color: #fffaf0; }
 [data-picked] .card-selection > svg { opacity: 1; scale: 1; }
 @keyframes select-check-in {
@@ -57,7 +57,7 @@
   box-shadow: inset 0 1px #ffffff27, 0 10px 28px #0c0a085f;
   color: #f5f2ec;
   white-space: nowrap;
-  animation: selection-dock-in .28s cubic-bezier(.18, .91, .31, 1.1) both;
+  animation: selection-dock-in .28s cubic-bezier(.22, 1, .36, 1) both;
 }
 @keyframes selection-dock-in {
   from { opacity: 0; transform: translateY(9px) scale(.94); }
@@ -68,14 +68,14 @@
   align-items: center;
   min-width: 76px;
   padding: 0 8px;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .selection-count > span { animation: selection-count-in .18s var(--ease) both; }
 @keyframes selection-count-in { from { opacity: .5; transform: translateY(2px); } }
 .selection-dock button { flex-shrink: 0; }
-.selection-dock :is(.selection-all, .selection-folder) {
+.selection-dock :is(.selection-all, .selection-folder, .selection-edit) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -85,10 +85,10 @@
   border-radius: 10px;
   background: transparent;
   color: inherit;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
 }
-.selection-dock .selection-all { font-size: 11px; color: #ddd7cc; }
+.selection-dock .selection-all { font-size: 12px; color: #ddd7cc; }
 .selection-dock button:hover:not(:disabled), .selection-folder[aria-expanded="true"] { background: #f8efe321; }
 .selection-dock .selection-folder {
   min-width: 0;

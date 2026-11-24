@@ -10,13 +10,11 @@ export function ThemeSwitch({ change }) {
   const gesture = useRef(null)
   const suppressClick = useRef(false)
   const frame = useRef(0)
-  const [pulse, setPulse] = useState(0)
   useEffect(() => () => cancelAnimationFrame(frame.current), [])
 
   function select(next) {
     if (next === theme) return
     setTheme(next)
-    setPulse(count => count + 1)
     change(next)
   }
 
@@ -91,10 +89,8 @@ export function ThemeSwitch({ change }) {
     <Sun className="theme-marker theme-marker-day" size={13} strokeWidth={1.6} aria-hidden="true" />
     <span className="theme-lens" aria-hidden="true">
       <span className="theme-orb">
-        <span className="theme-glint" />
         <Moon className="theme-glyph theme-moon" size={15} strokeWidth={1.7} />
         <Sun className="theme-glyph theme-sun" size={16} strokeWidth={1.7} />
-        {pulse > 0 && <span className="theme-pulse" key={pulse}><i /><i /><i /></span>}
       </span>
     </span>
   </button>

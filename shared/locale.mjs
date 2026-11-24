@@ -498,6 +498,7 @@ const messages = {
   'Из «{name}» добавлено {count}': ['{count} added from {name}', '已从“{name}”添加 {count}'],
   'Импорт из «{name}»': ['Importing from {name}', '正在从“{name}”导入'],
   'Править выбранные фото': ['Edit selected photos', '编辑所选照片'],
+  'Править': ['Edit', '编辑'],
   'Пакетная правка': ['Batch edit', '批量编辑'],
   'копии сохранятся рядом с оригиналами': ['copies are saved next to the originals', '副本将保存在原图旁边'],
   'Сохранить копии': ['Save copies', '保存副本'],

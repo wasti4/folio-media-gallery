@@ -3,7 +3,7 @@ import {
   ArrowDownWideNarrow, Check, ChevronDown, Clock3, Clapperboard, Copy, Ellipsis, Film,
   Folder, Globe2, HardDrive, Heart, Image, Images, LayoutGrid, List, LockKeyhole, Minus, Play, Plus, Search, Settings2, Square, SquareCheckBig, Trash2, Tv, Undo2, X,
 } from 'lucide-react'
-import { IconButton, Picture, clock, formatDate } from './ui.jsx'
+import { IconButton, Picture, clock, formatDate, sizeLabel } from './ui.jsx'
 import { isDesktop, mediaApi } from './media-api.mjs'
 import { brandBars, productName } from '../shared/brand.mjs'
 import { ThemeSwitch } from './theme-switch.jsx'
@@ -217,6 +217,16 @@ export function GalleryToolbar({ filter, setFilter, sort, openSort, view, setVie
   </div>
 }
 
+// Format, pixel size or running time, and file size: the aligned columns of the list view.
+function MediaFacts({ item, language }) {
+  const extent = item.width && item.height ? item.width + ' × ' + item.height : item.duration > 0 ? clock(item.duration) : ''
+  return <span className="card-facts">
+    <span className="fact-kind">{item.ext?.toUpperCase()}</span>
+    <span className="fact-extent">{extent}</span>
+    <span className="fact-size">{item.size > 0 ? sizeLabel(item.size, language) : ''}</span>
+  </span>
+}
+
 function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, onPick, index, renderPicture }) {
   const { t, language } = useLocale()
   const canPick = selecting && item.kind === 'photo' && !item.demo
@@ -230,7 +240,7 @@ function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, o
         {canPick && <span className="card-selection" aria-hidden="true" style={{ '--pick-delay': Math.min(index, 12) * 10 + 'ms' }}>
           <Check size={15} strokeWidth={2.6} />
         </span>}
-        <span className={'format-label format-' + item.kind}>{item.kind === 'video' && <Film size={12} />} {item.ext.toUpperCase()}</span>
+        {item.kind !== 'photo' && <span className={'format-label format-' + item.kind}>{item.kind === 'video' && <Film size={12} />} {item.ext.toUpperCase()}</span>}
         {item.kind === 'video' && <span className="thumb-play"><Play size={17} fill="currentColor" /></span>}
         {item.duration > 0 && <span className="duration-label">{clock(item.duration)}</span>}
       </div>
@@ -238,6 +248,7 @@ function MediaCard({ item, onOpen, onMenu, favorite, eager, selecting, picked, o
         <strong title={item.filename}>{item.name}</strong>
         <span><span className="caption-folder" title={item.folderName}>{item.folderName}</span>{item.modifiedAt != null && <><span className="inline-dot" /><span className="caption-date">{formatDate(item.modifiedAt, language)}</span></>}</span>
       </span>
+      <MediaFacts item={item} language={language} />
     </button>
     {!selecting && <>
       {favorite && <IconButton icon={Heart} className={'card-favorite glass-button' + (item.favorite ? ' is-favorite' : '')}

@@ -18,8 +18,10 @@ export function SelectionDock({ count, total, selectAll, openFolders, edit, remo
       <span>{working?.name || t('В папку')}</span>
       <ChevronDown size={13} aria-hidden="true" />
     </button>
-    {edit && <IconButton icon={SlidersHorizontal} label={t('Править выбранные фото')} className="selection-edit" size={17}
-      disabled={!count || Boolean(working)} onClick={edit} />}
+    {edit && <button type="button" className="selection-edit" aria-label={t('Править выбранные фото')} title={t('Править выбранные фото')}
+      disabled={!count || Boolean(working)} onClick={edit}>
+      <SlidersHorizontal size={16} aria-hidden="true" /><span>{t('Править')}</span>
+    </button>}
     <IconButton icon={Trash2} label={t('Удалить выбранные фото')} className="selection-trash" size={17}
       disabled={!count || Boolean(working)} data-photo-target="trash" onClick={remove} />
     <IconButton icon={X} label={t('Завершить выбор')} className="selection-close" size={16} disabled={Boolean(working)} onClick={close} />

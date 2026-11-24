@@ -4,7 +4,7 @@
   background-color: var(--intro-control);
   padding: 18px;
 }
-.gallery-wrap:has(> .vault-access) { display: grid; min-height: 100%; place-items: center; }
+.gallery-wrap:has(> .vault-access) { display: grid; min-height: 100%; place-items: center; padding-block: 24px; }
 .gallery-wrap:has(> .vault-access) > .library-header { display: none; }
 .vault-access {
   display: grid;
@@ -50,7 +50,7 @@
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   text-underline-offset: 3px;
 }
 .vault-access-alternate:hover:not(:disabled) { color: var(--text); text-decoration: underline; }

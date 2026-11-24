@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { CircleArrowUp, Folder, FolderOpen, FolderPlus, FolderSync, HardDrive, History, LoaderCircle, RotateCcw, Trash2, X } from 'lucide-react'
 import { useLocale } from './localization.jsx'
 import { mediaApi } from './media-api.mjs'
-import { Dialog, IconButton, Picture } from './ui.jsx'
+import { Dialog, IconButton, Picture, formatDate, sizeLabel } from './ui.jsx'
 import { translateError } from '../shared/locale.mjs'
 import './library-settings.css'
 
@@ -87,13 +87,6 @@ function UpdateSettings({ status }) {
     <p>{t('Раз в день Folio спрашивает у GitHub, вышла ли новая версия. Больше ничего не отправляется.')}</p>
     {failure && <p className="settings-error" role="alert">{failure}</p>}
   </section>
-}
-
-function sizeLabel(bytes, language) {
-  if (bytes == null) return '—'
-  const formats = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte']
-  const power = Math.min(formats.length - 1, Math.max(0, Math.floor(Math.log10(Math.max(bytes, 1)) / 3)))
-  return new Intl.NumberFormat(language, { style: 'unit', unit: formats[power], maximumFractionDigits: 1 }).format(bytes / 1000 ** power)
 }
 
 export function LibrarySettings({ close, moved, progress, update, watchedAdded }) {
@@ -193,7 +186,6 @@ export function DeletedPhotos({ items, restore, recycle, recycleAll, working }) 
   const [requested, setPage] = useState(0)
   const last = Math.max(0, Math.ceil(items.length / pageSize) - 1)
   const page = Math.min(requested, last)
-  const date = new Intl.DateTimeFormat(language, { dateStyle: 'medium' })
   if (!items.length) return <div className="gallery-empty">
     <div className="empty-icon"><Trash2 size={26} strokeWidth={1.4} /></div>
     <h2>{t('Удалённых фото пока нет')}</h2>
@@ -215,7 +207,7 @@ export function DeletedPhotos({ items, restore, recycle, recycleAll, working }) 
         <div className="media-thumb"><Picture item={{ ...item, kind: 'photo' }} /></div>
         <div className="card-caption">
           <strong title={item.filename}>{item.name}</strong>
-          <span><span className="caption-folder" title={item.folderName}>{item.folderName}</span><span className="inline-dot" /><span className="caption-date">{date.format(item.deletedAt)}</span></span>
+          <span><span className="caption-folder" title={item.folderName}>{item.folderName}</span><span className="inline-dot" /><span className="caption-date">{formatDate(item.deletedAt, language)}</span></span>
         </div>
         <div className="deleted-card-actions">
           <IconButton icon={RotateCcw} label={t('Восстановить «{name}»', { name: item.name })} disabled={working} onClick={() => restore([item.id])} />

@@ -119,6 +119,13 @@ const dateFormats = Object.fromEntries(languages.map(({ id }) => [id, [
 export const formatDate = (value, language = 'ru') =>
   dateFormats[language][Number(new Date(value).getFullYear() !== new Date().getFullYear())].format(value)
 
+const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte']
+export function sizeLabel(bytes, language) {
+  if (bytes == null) return '—'
+  const power = Math.min(byteUnits.length - 1, Math.max(0, Math.floor(Math.log10(Math.max(bytes, 1)) / 3)))
+  return new Intl.NumberFormat(language, { style: 'unit', unit: byteUnits[power], maximumFractionDigits: 1 }).format(bytes / 1000 ** power)
+}
+
 export function quantity(amount, [one, few, many], language = 'ru') {
   if (language === 'en') return amount + ' ' + translate(language, one) + (amount === 1 ? '' : 's')
   if (language === 'zh-CN') return amount + ' ' + translate(language, one)

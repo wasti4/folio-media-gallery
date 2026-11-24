@@ -86,6 +86,12 @@ async function bundleTools(destination) {
   await copyFile(path.join(root, 'build', 'GPL-3.0.txt'), path.join(destination, 'GPL-3.0.txt'))
 }
 
+// Chromium reads a locale file only for its own built-in strings and falls back to en-US for any other
+// system language. Folio's interface is translated by the app itself, so the other 52 files are dead weight.
+const keptLocales = new Set(['en-US.pak', 'ru.pak', 'zh-CN.pak'])
+const shipped = source => source !== electron && path.basename(source) !== 'default_app.asar' &&
+  (path.basename(path.dirname(source)) !== 'locales' || keptLocales.has(path.basename(source)))
+
 const buildName = productName + '-' + metadata.version
 const firstBuild = insideRelease(path.join(release, buildName))
 const destination = await mkdir(firstBuild).then(() => firstBuild).catch(error => {
@@ -94,10 +100,7 @@ const destination = await mkdir(firstBuild).then(() => firstBuild).catch(error =
 })
 let installerStage
 try {
-  await cp(path.dirname(electron), destination, {
-    recursive: true,
-    filter: source => source !== electron && path.basename(source) !== 'default_app.asar',
-  })
+  await cp(path.dirname(electron), destination, { recursive: true, filter: shipped })
   const resources = path.join(destination, 'resources')
   const app = path.join(resources, 'app')
   await mkdir(app, { recursive: true })
