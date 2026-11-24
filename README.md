@@ -135,7 +135,7 @@ npm start
 
 `Folio.exe --intro` replays the first-launch tour. `FOLIO_TEST_PROFILE` points the app at a separate profile, and `FOLIO_UPDATE_FEED` points a development run at a test release feed; the end-to-end suites use both. The installer needs Inno Setup 6.6+ (`FOLIO_ISCC_PATH` for a custom location).
 
-[GitHub Actions](.github/workflows/ci.yml) runs the unit and end-to-end suites on every pull request and every push to `main`, then builds the installer, tests install, update, relaunch and uninstall, and keeps the installer, the portable zip and their checksums as a build artifact for 14 days.
+[GitHub Actions](.github/workflows/ci.yml) runs the unit and end-to-end suites on every pull request and every push to `main`. Alongside them it builds the installer, tests install, update, relaunch and uninstall, and keeps the installer, the portable zip and their checksums as a build artifact for 14 days.
 
 <details>
 <summary><b>How it works</b></summary>

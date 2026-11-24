@@ -41,7 +41,6 @@ jobs:
 
   package:
     name: Windows installer
-    needs: test
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -72,7 +71,8 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          7z a -tzip -mx=7 "release\Folio-$version-portable.zip" ".\release\Folio-$version\*" | Out-Null
+          # Like the published archives, the zip holds one Folio-x.y.z folder.
+          7z a -tzip -mx=7 "release\Folio-$version-portable.zip" ".\release\Folio-$version" | Out-Null
           Get-FileHash "release\Folio-$version-Setup.exe", "release\Folio-$version-portable.zip" -Algorithm SHA256 |
             ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } |
             Set-Content release\SHA256SUMS.txt
